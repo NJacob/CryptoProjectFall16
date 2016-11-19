@@ -37,10 +37,11 @@ class ElectionBoard():
     lam = None
     g = None
     u = None
+
     def __init__(self):
         p = 2
-        i = random.randint(0, 20)
-        j = random.randint(0, 20)
+        i = random.randint(0, 10)
+        j = random.randint(0, 10)
         while p<=1000:
             p = gmpy2.next_prime(p)
         while i > 0:
@@ -51,7 +52,7 @@ class ElectionBoard():
             q = gmpy2.next_prime(q)
             j = j -1
         n = p*q
-        while fractions.gcd(q-1, p-1) == 1 or fractions.gcd(q-1, n) == 1 or fractions.gcd(p-1, n) == 1:
+        while fractions.gcd((q-1)*(p-1), n) != 1:
             q = gmpy2.next_prime(q)
             n = p*q
         lam = (p-1)*(q-1)/fractions.gcd(p-1,q-1)
@@ -67,13 +68,19 @@ class ElectionBoard():
         self.lam = lam
         self.g=g
         self.u=u
-    def get_voters():
-        return voters
-    def register_voter(v):
-        if v not in voters:
-            voters.append(v)
-    def check_registered(v):
-        return v in voters
+
+    def get_voters(self):
+        return self.voters
+
+    def register_voter(self, v):
+        if v not in self.voters:
+            self.voters.append(v)
+
+    def check_registered(self, v):
+        return v in self.voters
+
+    def get_public_key(self):
+        return (self.n, self.g)
     
     
 
@@ -83,6 +90,14 @@ def main():
     print [3, modinv(3,4), (3,4)]
     print [27, modinv(2,53), (2, 53)]
     print [23, modinv(30,53), (30,53)]
+    em = ElectionBoard()
+    print em.get_public_key()
+    print em.get_voters()
+    em.register_voter('Sam')
+    em.register_voter('Mark')
+    em.register_voter('Test')
+    print em.get_voters()
+    
 
 if __name__ == '__main__':
 	main()
