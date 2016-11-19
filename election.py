@@ -19,16 +19,15 @@ def modinv(a, b):
     v = [[1,0],[0,1]]
     A=b
     B=a
-    x = 1
     y = A//B
-    C = x*A-y*B
+    C = (A%B)
     while C > 1:
-        vtmp = [x*v[0][0]-y*v[1][0], x*v[0][1]-y*v[1][1]]
+        vtmp = [(v[0][0]-y*v[1][0]), (v[0][1]-y*v[1][1])]
         v = [v[1], vtmp]
         A = B
         B = C
         y = A//B
-        C = x*A-y*B
+        C = (A%B)
     if C == 1:
         ret = (v[0][1]-y*v[1][1])%b
     return ret
@@ -52,19 +51,21 @@ class Voter():#always register name with board before creating a new Voter
         n = pubkey[0]
         g = pubkey[1]
         n2 = n**2
-        r = random.randint(0, n)
+        r = random.randint(1, n)
         print 'Ptext={}'.format(m)
-        x = random.randint(0, n)
+        x = random.randint(1, n)
         ciphertext = (((g**m)%n2)*((x**n)%n2))%n2
-        signedciphertext = (em.blind_sign((ciphertext*r)%n)*modinv(r, n))%n
+        signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n)*modinv(r, n))%n2
         print 'ctext={}'.format(ciphertext)
         print 'signed ctext={}'.format(signedciphertext)
+        print 'unsigned ctext={}=?{}'.format(em.unsign(signedciphertext), ciphertext%n)
+        print 'decrypted ctext={}=?{}'.format(em.decrypt(ciphertext), m)
         bb = em.get_bulletin_board()
         numtests = bb.get_num_tests()
         for t in range(numtests):#ZKP
             print 'test {}'.format(t)
-            r = random.randint(0, n)
-            s = random.randint(0, n)
+            r = random.randint(1, n)
+            s = random.randint(1, n)
             u = (((g**r)%n2)*((s**n)%n2))%n2
             print 'getting challenge for {}'.format(u)
             e = bb.generate_challenge(self, u)  
@@ -114,7 +115,7 @@ class BulletinBoard():
         if not self.electionboard.check_registered(votername):
             return False
         self.voterdata[votername] = [u, self.numtests]
-        return random.randint(0, self.electionboard.get_public_key()[0])
+        return random.randint(1, self.electionboard.get_public_key()[0])
 
     def check_response(self, voter, checkval):
         votername = voter.get_name()
@@ -174,7 +175,7 @@ class ElectionBoard():
         u = None
         g = None
         while u is None:
-            g = random.randint(0, n**2)
+            g = random.randint(1, n**2)
             u = ((g**lam)%(n**2)-1)//n
             u = modinv(u, n)
         self.n=n
@@ -183,7 +184,7 @@ class ElectionBoard():
         self.lam = lam
         self.g=g
         self.u=u
-        self.blindsignkey = random.randint(0, p)
+        self.blindsignkey = random.randint(1, int(math.sqrt(p)))
 
     def set_bulletin_board(self, bb):
         self.bulletinboard = bb
@@ -207,10 +208,20 @@ class ElectionBoard():
         return (self.n, self.g)
 
     def blind_sign(self, message):
-        return (message*self.blindsignkey)%self.n
+        print '{}^-1mod{}={}, {}'.format(self.blindsignkey, self.n, modinv(self.blindsignkey, self.n), (self.blindsignkey*modinv(self.blindsignkey, self.n))%self.n)
+        return (message**self.blindsignkey)%(self.n)
 
     def unsign(self, message):
-        return (modinv(message, n)*self.blindsignkey)%self.n
+        return (message**modinv(self.blindsignkey,self.n))%(self.n)
+
+    def decrypt(self, message): 
+        n = self.n
+        n2 = n**2
+        c = (message**self.lam)%n2
+        g = (self.g**self.lam)%n2
+        lc = ((c-1)%n2)//n
+        lg = ((g-1)%n2)//n
+        return (lc%n)*modinv(lg, n)
 
 def main():
     print [1, modinv(1,4), (1,4)]
@@ -230,6 +241,10 @@ def main():
     test = Voter('Test', em)
     bb = BulletinBoard()
     linkboards(em, bb)
+    for i in range(1, 10):
+        s = em.blind_sign(i)
+        print s
+        print [i,'{}'.format(em.unsign(s))]
     print sam.vote(0,0)
 
 if __name__ == '__main__':
