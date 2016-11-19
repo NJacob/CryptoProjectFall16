@@ -19,9 +19,7 @@ def modinv(a, b):
     y = A//B
     C = x*A-y*B
     while C > 1:
-        vtmp = []
-        for i in range(len(v[1])):
-            vtmp.append(x*v[0][i]-y*v[1][i])
+        vtmp = [x*v[0][0]-y*v[1][0], x*v[0][1]-y*v[1][1]]
         v = [v[1], vtmp]
         A = B
         B = C
@@ -80,7 +78,11 @@ class ElectionBoard():
     
 
 def main():
-    pass
+    print [1, modinv(1,4), (1,4)]
+    print ['n', modinv(2,4), (2,4)]
+    print [3, modinv(3,4), (3,4)]
+    print [27, modinv(2,53), (2, 53)]
+    print [23, modinv(30,53), (30,53)]
 
 if __name__ == '__main__':
 	main()
