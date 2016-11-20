@@ -86,6 +86,20 @@ class Voter():#always register name with board before creating a new Voter
                 return False
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
+class CountingAuthority():
+    electionboard = None
+
+    def __init__(self, em):
+        self.electionboard = em
+
+    def send_results(self, votes, numcandidates):
+        res = [1 for c in range(numcandidates)]
+        for vote in votes:
+            for v in range(len(vote)):
+                res[v] = res[v] * vote[v]
+        ret = self.electionboard.decrypt_results(res)
+        return ret
+
 class BulletinBoard():
     numtests=5#number of times to run ZKP
     electionboard = None
@@ -100,6 +114,7 @@ class BulletinBoard():
 
     def set_election_board(self, em):
         self.electionboard = em
+        self.countingauthority = CountingAuthority(self.electionboard)
 
     def set_counting_authority(self, ca):
         self.countingauthority = ca
@@ -134,7 +149,7 @@ class BulletinBoard():
         r = random.randint(1, n2)
         signedtext = (em.blind_sign((ciphertext+em.unsign(r))%n)*modinv(r, n2))%n2
         print 'signed text = {}=?{}=?{}'.format(signedtext, signedciphertext, em.blind_sign(ciphertext))
-        if signedciphertext == signedtext and em.check_registered(votername):
+        if candidate < self.numcandidates and signedciphertext == signedtext and em.check_registered(votername):
             if votername not in self.votes.keys():
                 self.votes[votername] = [0 for c in range(self.numcandidates)]
             self.votes[votername][candidate] = self.ciphertext
@@ -146,6 +161,9 @@ class BulletinBoard():
         for v in self.votes.keys():
             ret.append(self.votes[v])
         return ret
+
+    def get_results(self):
+        return self.countingauthority.send_results(self.get_votes(), self.numcandidates)
 
 class ElectionBoard():
     voters = []
@@ -243,6 +261,25 @@ class ElectionBoard():
         lc = (c-1)//n
         return (lc*self.u)%n
 
+    def decrypt_results(self, tallies): 
+        ret = []
+        for t in tallies:
+            ret.append(self.decrypt(t))
+        return ret
+
+    def get_results(self):
+        res = self.bulletinboard.get_results()
+        maxvotes = 0
+        indices = []
+        for r in range(len(res)):
+            nv = res[r]
+            if nv > maxvotes:
+                maxvotes = nv
+                indices = [r]
+            elif nv == maxvotes:
+                indices.append(r)
+        return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
+
 def main():
     print [1, modinv(1,4), (1,4)]
     print ['n', modinv(2,4), (2,4)]
@@ -281,6 +318,7 @@ def main():
     print numfails, numfails*1.0/10
     print numhmfails, numhmfails*1.0/10000
     print sam.vote(0,0)
+    print em.get_results()
 
 if __name__ == '__main__':
 	main()
