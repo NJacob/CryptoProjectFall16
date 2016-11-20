@@ -1,9 +1,6 @@
 #!/usr/bin/env python2.7
-import numpy as np
 import math
 import random
-import time
-from PIL import Image
 import gmpy2
 import fractions
 
@@ -54,11 +51,11 @@ class Voter():#always register name with board before creating a new Voter
         r = random.randint(1, n)
         print 'Ptext={}'.format(m)
         x = random.randint(1, n)
-        ciphertext = (((g**m)%n2)*((x**n)%n2))%n2
+        ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
         signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n)*modinv(r, n))%n2
         print 'ctext={}'.format(ciphertext)
         print 'signed ctext={}'.format(signedciphertext)
-        print 'unsigned ctext={}=?{}'.format(em.unsign(signedciphertext), ciphertext%n)
+        print 'unsigned ctext={}=?{}%n={}'.format(em.unsign(signedciphertext), ciphertext, ciphertext%n)
         print 'decrypted ctext={}=?{}'.format(em.decrypt(ciphertext), m)
         bb = em.get_bulletin_board()
         numtests = bb.get_num_tests()
@@ -66,7 +63,7 @@ class Voter():#always register name with board before creating a new Voter
             print 'test {}'.format(t)
             r = random.randint(1, n)
             s = random.randint(1, n)
-            u = (((g**r)%n2)*((s**n)%n2))%n2
+            u = (pow(g,r,n2)*pow(s,n,n2))%n2
             print 'getting challenge for {}'.format(u)
             e = bb.generate_challenge(self, u)  
             print 'challenge= {}'.format(e)
@@ -75,15 +72,15 @@ class Voter():#always register name with board before creating a new Voter
             gv = 0
             if v < 0:
                 print v
-                gv = ((modinv(g, n)**(0-v))%n2) 
+                gv = pow(modinv(g, n),(0-v),n2) 
                 print gv
-                w = (s*((modinv(x,n)**e)%n2)*((modinv(g, n)**((e*m-r)//n))%n2))%n2
+                w = (s*(pow(modinv(x,n),e,n2)*pow(modinv(g, n),((0-v)//n),n2)))%n2
             else:
                 print v
-                gv = ((g**v)%(n**2))
+                gv = pow(g,v,n2)
                 print gv
-                w = s*(modinv(x,n)**e)*(g**((r-e*m)//n))
-            checkval = (gv*((ciphertext**e)%(n**2))*((w**n)%(n**2)))%(n**2)
+                w = (s*(pow(modinv(x,n),e,n2)*pow(modinv(g, n),(v//n),n2)))%n2
+            checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
             print 'response= {}'.format(checkval)
             if e is False or not bb.check_response(self, checkval):
                 return False
@@ -126,11 +123,12 @@ class BulletinBoard():
                 return True
         return False
     
-    def receive_encrypted_message(voter, ciphertext, signedciphertext, candidate):
+    def receive_encrypted_message(self, voter, ciphertext, signedciphertext, candidate):
         votername = voter.get_name()
         unsignedtext = self.electionboard.unsign(signedciphertext)
-        print 'unsigned text = {}'.format(unsignedtext)
-        if ciphertext == unsignedciphertext and self.electionboard.check_registered(votername):
+        n = self.electionboard.get_public_key()[0]
+        print 'unsigned text = {}=?{}'.format(unsignedtext, ciphertext%n)
+        if ciphertext%n == unsignedtext and self.electionboard.check_registered(votername):
             if votername not in self.votes.keys():
                 self.votes[votername] = [0 for c in range(self.numcandidates)]
             self.votes[votername][candidate] = self.ciphertext
@@ -151,14 +149,17 @@ class ElectionBoard():
     lam = None
     g = None
     u = None
-    blindsignkey = None
+    bn = None#blindisgnkeydata
+    bg = None#blindisgnkeydata
+    blam = None#blindisgnkeydata
+    bu = None#blindisgnkeydata
     bulletinboard = None
 
     def __init__(self):
         p = 2
         i = random.randint(0, 5)
         j = random.randint(0, 5)
-        while p<=500:
+        while p<=300:
             p = gmpy2.next_prime(p)
         while i > 0:
             p = gmpy2.next_prime(p)
@@ -171,12 +172,13 @@ class ElectionBoard():
         while fractions.gcd((q-1)*(p-1), n) != 1:
             q = gmpy2.next_prime(q)
             n = p*q
-        lam = (p-1)*(q-1)/fractions.gcd(p-1,q-1)
+        n2 = n**2
+        lam = ((p-1)*(q-1))/fractions.gcd(p-1,q-1)
         u = None
         g = None
         while u is None:
-            g = random.randint(1, n**2)
-            u = ((g**lam)%(n**2)-1)//n
+            g = random.randint(1, n2)
+            u = (pow(g,lam,n2)-1)//n
             u = modinv(u, n)
         self.n=n
         self.p=p
@@ -184,7 +186,14 @@ class ElectionBoard():
         self.lam = lam
         self.g=g
         self.u=u
-        self.blindsignkey = random.randint(1, int(math.sqrt(p)))
+        bu = None
+        bg = None
+        while bu is None or bg == g:
+            bg = random.randint(1, n2)
+            bu = (pow(bg,lam,n2)-1)//n
+            bu = modinv(bu, n)
+        self.bg=bg
+        self.bu=bu
 
     def set_bulletin_board(self, bb):
         self.bulletinboard = bb
@@ -208,20 +217,25 @@ class ElectionBoard():
         return (self.n, self.g)
 
     def blind_sign(self, message):
-        print '{}^-1mod{}={}, {}'.format(self.blindsignkey, self.n, modinv(self.blindsignkey, self.n), (self.blindsignkey*modinv(self.blindsignkey, self.n))%self.n)
-        return (message**self.blindsignkey)%(self.n)
+        n = self.n
+        g = self.bg
+        n2 = n**2
+        x = random.randint(1, n)
+        return (pow(g,message,n2)*pow(x,n,n2))%n2
 
     def unsign(self, message):
-        return (message**modinv(self.blindsignkey,self.n))%(self.n)
+        n = self.n
+        n2 = n**2
+        c = pow(message,self.lam,n2)
+        lc = (c-1)//n
+        return (lc*self.bu)%n
 
     def decrypt(self, message): 
         n = self.n
         n2 = n**2
-        c = (message**self.lam)%n2
-        g = (self.g**self.lam)%n2
-        lc = ((c-1)%n2)//n
-        lg = ((g-1)%n2)//n
-        return (lc%n)*modinv(lg, n)
+        c = pow(message,self.lam,n2)
+        lc = (c-1)//n
+        return (lc*self.u)%n
 
 def main():
     print [1, modinv(1,4), (1,4)]
@@ -241,10 +255,11 @@ def main():
     test = Voter('Test', em)
     bb = BulletinBoard()
     linkboards(em, bb)
-    for i in range(1, 10):
+    for i in range(1, 1000):
         s = em.blind_sign(i)
-        print s
-        print [i,'{}'.format(em.unsign(s))]
+        u = em.unsign(s)
+        if u != i:
+            print ['FAIL', i, s, u]
     print sam.vote(0,0)
 
 if __name__ == '__main__':
