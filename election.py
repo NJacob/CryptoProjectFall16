@@ -48,11 +48,11 @@ class Voter():#always register name with board before creating a new Voter
         n = pubkey[0]
         g = pubkey[1]
         n2 = n**2
-        r = random.randint(1, n)
+        r = random.randint(1, n2)
         print 'Ptext={}'.format(m)
         x = random.randint(1, n)
         ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
-        signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n)*modinv(r, n))%n2
+        signedciphertext = (em.blind_sign((ciphertext+em.unsign(r))%n)*modinv(r, n2))%n2
         print 'ctext={}'.format(ciphertext)
         print 'signed ctext={}'.format(signedciphertext)
         print 'unsigned ctext={}=?{}%n={}'.format(em.unsign(signedciphertext), ciphertext, ciphertext%n)
@@ -125,10 +125,16 @@ class BulletinBoard():
     
     def receive_encrypted_message(self, voter, ciphertext, signedciphertext, candidate):
         votername = voter.get_name()
-        unsignedtext = self.electionboard.unsign(signedciphertext)
-        n = self.electionboard.get_public_key()[0]
-        print 'unsigned text = {}=?{}'.format(unsignedtext, ciphertext%n)
-        if ciphertext%n == unsignedtext and self.electionboard.check_registered(votername):
+        em = self.electionboard
+        n = em.get_public_key()[0]
+        #unsignedtext = self.electionboard.unsign(signedciphertext)
+        #print 'unsigned text = {}=?{}'.format(unsignedtext, ciphertext%n)
+        #if ciphertext%n == unsignedtext and self.electionboard.check_registered(votername):
+        n2 = n**2
+        r = random.randint(1, n2)
+        signedtext = (em.blind_sign((ciphertext+em.unsign(r))%n)*modinv(r, n2))%n2
+        print 'signed text = {}=?{}=?{}'.format(signedtext, signedciphertext, em.blind_sign(ciphertext))
+        if signedciphertext == signedtext and em.check_registered(votername):
             if votername not in self.votes.keys():
                 self.votes[votername] = [0 for c in range(self.numcandidates)]
             self.votes[votername][candidate] = self.ciphertext
@@ -244,7 +250,10 @@ def main():
     print [27, modinv(2,53), (2, 53)]
     print [23, modinv(30,53), (30,53)]
     em = ElectionBoard()
-    print em.get_public_key()
+    k = em.get_public_key()
+    n = k[0]
+    n2 = n**2
+    print k
     print em.get_voters()
     em.register_voter('Sam')
     em.register_voter('Mark')
@@ -255,11 +264,22 @@ def main():
     test = Voter('Test', em)
     bb = BulletinBoard()
     linkboards(em, bb)
+    numfails = 0
+    numhmfails = 0
     for i in range(1, 1000):
         s = em.blind_sign(i)
         u = em.unsign(s)
         if u != i:
             print ['FAIL', i, s, u]
+            numfails = numfails +1
+        for j in range(1,1000):
+            t = em.blind_sign(j)
+            u = em.blind_sign(i+j)
+            if (s*t)%n2!=u:
+                #print ['HMFAIL', i, j, s,t, u]
+                numhmfails = numhmfails+1
+    print numfails, numfails*1.0/10
+    print numhmfails, numhmfails*1.0/10000
     print sam.vote(0,0)
 
 if __name__ == '__main__':
