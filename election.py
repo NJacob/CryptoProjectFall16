@@ -35,7 +35,7 @@ class Voter():#always register name with board before creating a new Voter
     
     def __init__(self, name, em):
         self.name = name
-        self.electionboard = em
+        self.electionboard = em#election board to vote with
 
     def get_name(self):
         return self.name
@@ -93,7 +93,7 @@ class CountingAuthority():
         self.electionboard = em
 
     def send_results(self, votes, numcandidates):
-        res = [1 for c in range(numcandidates)]
+        res = [1 for c in range(numcandidates)]#return E(v1)*E(v2)...
         for vote in votes:
             for v in range(len(vote)):
                 res[v] = res[v] * vote[v]
@@ -104,8 +104,8 @@ class BulletinBoard():
     numtests=5#number of times to run ZKP
     electionboard = None
     countingauthority = None
-    votes = {}
-    voterdata = {}
+    votes = {}#dict of votes, keyed by votername
+    voterdata = {}#stores data used in ZKP to check when necessary
     numcandidates = 1
     
     def __init_(self, nt=5, nc=1):
@@ -173,17 +173,15 @@ class ElectionBoard():
     lam = None
     g = None
     u = None
-    bn = None#blindisgnkeydata
     bg = None#blindisgnkeydata
-    blam = None#blindisgnkeydata
     bu = None#blindisgnkeydata
     bulletinboard = None
 
-    def __init__(self):
+    def __init__(self):#generate keys for PPKE and blindsign
         p = 2
-        i = random.randint(0, 5)
-        j = random.randint(0, 5)
-        while p<=300:
+        i = random.randint(0, 8)
+        j = random.randint(1, 9)
+        while p<=500:
             p = gmpy2.next_prime(p)
         while i > 0:
             p = gmpy2.next_prime(p)
@@ -201,9 +199,15 @@ class ElectionBoard():
         u = None
         g = None
         while u is None:
-            g = random.randint(1, n2)
+            a = random.randint(1, n)
+            b = random.randint(1, n)
+            g = ((a*n+1)*pow(b, n, n2))%n2
+            #g = random.randint(1, n2)
             u = (pow(g,lam,n2)-1)//n
-            u = modinv(u, n)
+            if (fractions.gcd(u, n)) != 1:
+                u = None
+            else:
+                u = modinv(u, n)
         self.n=n
         self.p=p
         self.q=q
@@ -213,9 +217,15 @@ class ElectionBoard():
         bu = None
         bg = None
         while bu is None or bg == g:
-            bg = random.randint(1, n2)
+            a = random.randint(1, n)
+            b = random.randint(1, n)
+            bg = ((a*n+1)*pow(b, n, n2))%n2
+            #bg = random.randint(1, n2)
             bu = (pow(bg,lam,n2)-1)//n
-            bu = modinv(bu, n)
+            if (fractions.gcd(bu, n)) != 1:
+                bu = None
+            else:
+                bu = modinv(bu, n)
         self.bg=bg
         self.bu=bu
 
@@ -313,7 +323,7 @@ def main():
             t = em.blind_sign(j)
             u = em.blind_sign(i+j)
             if (s*t)%n2!=u:
-                #print ['HMFAIL', i, j, s,t, u]
+                print ['HMFAIL', i, j, s,t, u]
                 numhmfails = numhmfails+1
     print numfails, numfails*1.0/10
     print numhmfails, numhmfails*1.0/10000
