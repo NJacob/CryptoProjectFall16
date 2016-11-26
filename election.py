@@ -48,11 +48,15 @@ class Voter():#always register name with board before creating a new Voter
         n = pubkey[0]
         g = pubkey[1]
         n2 = n**2
-        r = random.randint(1, n2)
         print 'Ptext={}'.format(m)
+        r = random.randint(1, n)
         x = random.randint(1, n)
+        while 1!=fractions.gcd(x, n):
+            x = random.randint(1, n)
+        while 1!=fractions.gcd(r, n):
+            r = random.randint(1, n)
         ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
-        signedciphertext = (em.blind_sign((ciphertext+em.unsign(r))%n)*modinv(r, n2))%n2
+        signedciphertext = (em.blind_sign((ciphertext+r)%n)*modinv(em.blind_sign(r), n2))%n2
         print 'ctext={}'.format(ciphertext)
         print 'signed ctext={}'.format(signedciphertext)
         print 'unsigned ctext={}=?{}%n={}'.format(em.unsign(signedciphertext), ciphertext, ciphertext%n)
@@ -61,9 +65,17 @@ class Voter():#always register name with board before creating a new Voter
         numtests = bb.get_num_tests()
         for t in range(numtests):#ZKP
             print 'test {}'.format(t)
+            u = n2
             r = random.randint(1, n)
             s = random.randint(1, n)
-            u = (pow(g,r,n2)*pow(s,n,n2))%n2
+            while 1!=fractions.gcd(u, n2):
+                r = random.randint(1, n)
+                s = random.randint(1, n)
+                while 1!=fractions.gcd(r, n):
+                    r = random.randint(1, n)
+                while 1!=fractions.gcd(s, n):
+                    s = random.randint(1, n)
+                u = (pow(g,r,n2)*pow(s,n,n2))%n2
             print 'getting challenge for {}'.format(u)
             e = bb.generate_challenge(self, u)  
             print 'challenge= {}'.format(e)
@@ -72,17 +84,19 @@ class Voter():#always register name with board before creating a new Voter
             gv = 0
             if v < 0:
                 print v
-                gv = pow(modinv(g, n),(0-v),n2) 
+                gv = pow(modinv(g, n2),(0-v),n2) 
                 print gv
-                w = (s*(pow(modinv(x,n),e,n2)*pow(modinv(g, n),((0-v)//n),n2)))%n2
+                w = (s*(pow(modinv(x,n2),e,n2)*pow(modinv(g, n2),((0-v)//n),n2)))%n2
             else:
                 print v
                 gv = pow(g,v,n2)
                 print gv
-                w = (s*(pow(modinv(x,n),e,n2)*pow(modinv(g, n),(v//n),n2)))%n2
+                w = (s*(pow(modinv(x,n2),e,n2)*pow(g,(v//n),n2)))%n2
+                #w = (s*(pow(modinv(x,n2),e,n2)*pow(modinv(g, n2),(v//n),n2)))%n2
             checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
             print 'response= {}'.format(checkval)
             if e is False or not bb.check_response(self, checkval):
+                print 'FALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSE{}'.format(m)
                 return False
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
@@ -93,7 +107,7 @@ class CountingAuthority():
         self.electionboard = em
 
     def send_results(self, votes, numcandidates):
-        res = [1 for c in range(numcandidates)]#return E(v1)*E(v2)...
+        res = [1 for c in range(numcandidates)]#E(v1)*E(v2)...
         for vote in votes:
             for v in range(len(vote)):
                 res[v] = res[v] * vote[v]
@@ -108,7 +122,7 @@ class BulletinBoard():
     voterdata = {}#stores data used in ZKP to check when necessary
     numcandidates = 1
     
-    def __init_(self, nt=5, nc=1):
+    def __init__(self, nt=5, nc=1):
         self.numtests = nt
         self.numcandidates = nc
 
@@ -126,8 +140,15 @@ class BulletinBoard():
         votername = voter.get_name()
         if not self.electionboard.check_registered(votername):
             return False
-        self.voterdata[votername] = [u, self.numtests]
-        return random.randint(1, self.electionboard.get_public_key()[0])
+        nt = self.numtests
+        if votername in self.voterdata.keys() and self.voterdata[votername][1] > 0:
+            nt = self.voterdata[votername][1]
+        self.voterdata[votername] = [u, nt]
+        n = self.electionboard.get_public_key()[0]
+        ret = random.randint(1, n)
+        while 1!= fractions.gcd(ret, n) or 1!= fractions.gcd(ret, u):
+            ret = random.randint(1, n)
+        return ret
 
     def check_response(self, voter, checkval):
         votername = voter.get_name()
@@ -142,17 +163,14 @@ class BulletinBoard():
         votername = voter.get_name()
         em = self.electionboard
         n = em.get_public_key()[0]
-        #unsignedtext = self.electionboard.unsign(signedciphertext)
-        #print 'unsigned text = {}=?{}'.format(unsignedtext, ciphertext%n)
-        #if ciphertext%n == unsignedtext and self.electionboard.check_registered(votername):
-        n2 = n**2
-        r = random.randint(1, n2)
-        signedtext = (em.blind_sign((ciphertext+em.unsign(r))%n)*modinv(r, n2))%n2
-        print 'signed text = {}=?{}=?{}'.format(signedtext, signedciphertext, em.blind_sign(ciphertext))
-        if candidate < self.numcandidates and signedciphertext == signedtext and em.check_registered(votername):
+        unsignedtext = em.unsign(signedciphertext)
+        print 'unsigned text = {}=?{}%n=?{}'.format(unsignedtext, ciphertext, ciphertext%n)
+        validvote = candidate < self.numcandidates and em.check_registered(votername) and unsignedtext==ciphertext%n
+        validvote = validvote and votername in self.voterdata.keys() and self.voterdata[votername][1] <= 0
+        if validvote:
             if votername not in self.votes.keys():
-                self.votes[votername] = [0 for c in range(self.numcandidates)]
-            self.votes[votername][candidate] = self.ciphertext
+                self.votes[votername] = [1 for c in range(self.numcandidates)]
+            self.votes[votername][candidate] = ciphertext
             return True 
         return False
 
@@ -199,10 +217,12 @@ class ElectionBoard():
         u = None
         g = None
         while u is None:
-            a = random.randint(1, n)
-            b = random.randint(1, n)
-            g = ((a*n+1)*pow(b, n, n2))%n2
-            #g = random.randint(1, n2)
+            g = n2
+            while 1!= fractions.gcd(g, n2) :
+                a = random.randint(1, n)
+                b = random.randint(1, n)
+                g = ((a*n+1)*pow(b, n, n2))%n2
+                #g = random.randint(1, n2)
             u = (pow(g,lam,n2)-1)//n
             if (fractions.gcd(u, n)) != 1:
                 u = None
@@ -255,6 +275,8 @@ class ElectionBoard():
         g = self.bg
         n2 = n**2
         x = random.randint(1, n)
+        while 1!= fractions.gcd(x, n):
+            x = random.randint(1, n)
         return (pow(g,message,n2)*pow(x,n,n2))%n2
 
     def unsign(self, message):
@@ -309,25 +331,36 @@ def main():
     sam = Voter('Sam', em)
     mark = Voter('Mark', em)
     test = Voter('Test', em)
-    bb = BulletinBoard()
+    bb = BulletinBoard(15, 10)
     linkboards(em, bb)
     numfails = 0
     numhmfails = 0
-    for i in range(1, 1000):
+    for i in range(0, 1000):
         s = em.blind_sign(i)
         u = em.unsign(s)
         if u != i:
             print ['FAIL', i, s, u]
             numfails = numfails +1
-        for j in range(1,1000):
+        for j in range(i,1000):
             t = em.blind_sign(j)
             u = em.blind_sign(i+j)
-            if (s*t)%n2!=u:
-                #print ['HMFAIL', i, j, s,t, u]#not homomorphic
+            if em.unsign(((s*t)%n2))!=((i+j)%n):
+                print ['NOT HOMOMORPHIC', i, j, s,t, u]
                 numhmfails = numhmfails+1
     print numfails, numfails*1.0/10
     print numhmfails, numhmfails*1.0/10000
     print sam.vote(0,0)
+    print sam.vote(0,1)
+    print sam.vote(0,2)
+    print sam.vote(0,3)
+    print sam.vote(1,4)
+    print sam.vote(1,5)
+    print sam.vote(0,6)
+    print sam.vote(1,7)
+    print sam.vote(0,8)
+    print sam.vote(1,9)
+    print sam.vote(1,6)
+    print sam.vote(1,6)
     print em.get_results()
 
 if __name__ == '__main__':
