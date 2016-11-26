@@ -173,8 +173,8 @@ class ElectionBoard():
     lam = None
     g = None
     u = None
-    bg = None#blindisgnkeydata
-    bu = None#blindisgnkeydata
+    bg = None#blindsignkeydata
+    bu = None#blindsignkeydata
     bulletinboard = None
 
     def __init__(self):#generate keys for PPKE and blindsign
