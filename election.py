@@ -323,7 +323,7 @@ def main():
             t = em.blind_sign(j)
             u = em.blind_sign(i+j)
             if (s*t)%n2!=u:
-                print ['HMFAIL', i, j, s,t, u]
+                #print ['HMFAIL', i, j, s,t, u]#not homomorphic
                 numhmfails = numhmfails+1
     print numfails, numfails*1.0/10
     print numhmfails, numhmfails*1.0/10000
