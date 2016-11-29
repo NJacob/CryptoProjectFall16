@@ -185,35 +185,40 @@ class BulletinBoard():
 
 class ElectionBoard():
     voters = []
-    n = None
+    #public key:
+    n = None    #product of p and q
+    g = None    #generator (?)  random integer?
+
+    #initial constants
     p = None
     q = None
-    lam = None
-    g = None
-    u = None
-    bg = None#blindsignkeydata
-    bu = None#blindsignkeydata
+
+    #private key:
+    lam = None  # phi(p,q) = (p-1)*(q-1)
+    u = None    # 1 / L( g^{lcm} mod {n^2} ), where L(x) = (x-1) / n    ?
+
+    #values for blind sign
+    bg = None #blindsignkeydata
+    bu = None #blindsignkeydata
+
     bulletinboard = None
 
     def __init__(self):#generate keys for PPKE and blindsign
-        p = 2
-        i = random.randint(0, 8)
-        j = random.randint(1, 9)
-        while p<=500:
+        #generate primes p,q, such that p>q
+        #  and (p-1)*(q-1) is coprime with p*q
+        p = gmpy2.next_prime(500)
+        for _ in range(0, random.randint(0,8)):
             p = gmpy2.next_prime(p)
-        while i > 0:
+        q = p
+        for _ in range(0, random.randint(1,9)):
             p = gmpy2.next_prime(p)
-            i = i -1
-        q = p+0
-        while j > 0:
-            q = gmpy2.next_prime(q)
-            j = j -1
+
         n = p*q
         while fractions.gcd((q-1)*(p-1), n) != 1:
             q = gmpy2.next_prime(q)
             n = p*q
-        n2 = n**2
-        lam = ((p-1)*(q-1))/fractions.gcd(p-1,q-1)
+        n2 = n**2   # n^2 to be used for modulus
+        lam = ((p-1)*(q-1))/fractions.gcd(p-1,q-1)  # least common multiple ?
         u = None
         g = None
         while u is None:
@@ -222,9 +227,11 @@ class ElectionBoard():
                 a = random.randint(1, n)
                 b = random.randint(1, n)
                 g = ((a*n+1)*pow(b, n, n2))%n2
-                #g = random.randint(1, n2)
+                #g = random.randint(1, n2)      #why was this changed?
+                #   ensure u and n are coprime
             u = (pow(g,lam,n2)-1)//n
             if (fractions.gcd(u, n)) != 1:
+                print "This shouldn't happen"
                 u = None
             else:
                 u = modinv(u, n)
@@ -246,7 +253,7 @@ class ElectionBoard():
                 bu = None
             else:
                 bu = modinv(bu, n)
-        self.bg=bg
+        self.bg=bg  # Generator
         self.bu=bu
 
     def set_bulletin_board(self, bb):
@@ -349,6 +356,7 @@ def main():
                 numhmfails = numhmfails+1
     print numfails, numfails*1.0/10
     print numhmfails, numhmfails*1.0/10000
+    return
     print sam.vote(0,0)
     print sam.vote(0,1)
     print sam.vote(0,2)
