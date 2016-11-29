@@ -56,7 +56,7 @@ class Voter():#always register name with board before creating a new Voter
         while 1!=fractions.gcd(r, n):
             r = random.randint(1, n)
         ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
-        signedciphertext = (em.blind_sign((ciphertext+r)%n)*modinv(em.blind_sign(r), n2))%n2
+        signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n)*modinv(r, n))%n
         print 'ctext={}'.format(ciphertext)
         print 'signed ctext={}'.format(signedciphertext)
         print 'unsigned ctext={}=?{}%n={}'.format(em.unsign(signedciphertext), ciphertext, ciphertext%n)
@@ -79,24 +79,23 @@ class Voter():#always register name with board before creating a new Voter
             print 'getting challenge for {}'.format(u)
             e = bb.generate_challenge(self, u)  
             print 'challenge= {}'.format(e)
+            if e is False:
+                print 'No challenge issued for {} from {}'.format(m, self.name)
+                return False
             v = r-e*m
             w = 0
             gv = 0
             if v < 0:
-                print v
                 gv = pow(modinv(g, n2),(0-v),n2) 
-                print gv
                 w = (s*(pow(modinv(x,n2),e,n2)*pow(modinv(g, n2),((0-v)//n),n2)))%n2
             else:
-                print v
                 gv = pow(g,v,n2)
-                print gv
                 w = (s*(pow(modinv(x,n2),e,n2)*pow(g,(v//n),n2)))%n2
                 #w = (s*(pow(modinv(x,n2),e,n2)*pow(modinv(g, n2),(v//n),n2)))%n2
             checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
             print 'response= {}'.format(checkval)
-            if e is False or not bb.check_response(self, checkval):
-                print 'FALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSEFALSE{}'.format(m)
+            if not bb.check_response(self, checkval):
+                print 'FAILED ZKP{}'.format(m)
                 return False
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
@@ -198,8 +197,8 @@ class ElectionBoard():
     u = None    # 1 / L( g^{lcm} mod {n^2} ), where L(x) = (x-1) / n    ?
 
     #values for blind sign
-    bg = None #blindsignkeydata
-    bu = None #blindsignkeydata
+    be = None #blindsignkeydata
+    bd = None #blindsignkeydata
 
     bulletinboard = None
 
@@ -218,7 +217,13 @@ class ElectionBoard():
             q = gmpy2.next_prime(q)
             n = p*q
         n2 = n**2   # n^2 to be used for modulus
-        lam = ((p-1)*(q-1))/fractions.gcd(p-1,q-1)  # least common multiple ?
+        lam = ((p-1)*(q-1))
+        be = random.randint(1, lam)
+        bd = modinv(be, lam)
+        while 1!=fractions.gcd(be, lam) or bd is None:
+            be = random.randint(1, lam)
+            bd = modinv(be, lam)
+        lam = lam/fractions.gcd(p-1,q-1)  # least common multiple ?
         u = None
         g = None
         while u is None:
@@ -241,20 +246,8 @@ class ElectionBoard():
         self.lam = lam
         self.g=g
         self.u=u
-        bu = None
-        bg = None
-        while bu is None or bg == g:
-            a = random.randint(1, n)
-            b = random.randint(1, n)
-            bg = ((a*n+1)*pow(b, n, n2))%n2
-            #bg = random.randint(1, n2)
-            bu = (pow(bg,lam,n2)-1)//n
-            if (fractions.gcd(bu, n)) != 1:
-                bu = None
-            else:
-                bu = modinv(bu, n)
-        self.bg=bg  # Generator
-        self.bu=bu
+        self.be=be
+        self.bd=bd
 
     def set_bulletin_board(self, bb):
         self.bulletinboard = bb
@@ -279,19 +272,13 @@ class ElectionBoard():
 
     def blind_sign(self, message):
         n = self.n
-        g = self.bg
-        n2 = n**2
-        x = random.randint(1, n)
-        while 1!= fractions.gcd(x, n):
-            x = random.randint(1, n)
-        return (pow(g,message,n2)*pow(x,n,n2))%n2
+        e = self.be
+        return pow(message,e,n)
 
     def unsign(self, message):
         n = self.n
-        n2 = n**2
-        c = pow(message,self.lam,n2)
-        lc = (c-1)//n
-        return (lc*self.bu)%n
+        d = self.bd
+        return pow(message,d,n)
 
     def decrypt(self, message): 
         n = self.n
@@ -348,15 +335,8 @@ def main():
         if u != i:
             print ['FAIL', i, s, u]
             numfails = numfails +1
-        for j in range(i,1000):
-            t = em.blind_sign(j)
-            u = em.blind_sign(i+j)
-            if em.unsign(((s*t)%n2))!=((i+j)%n):
-                print ['NOT HOMOMORPHIC', i, j, s,t, u]
-                numhmfails = numhmfails+1
     print numfails, numfails*1.0/10
-    print numhmfails, numhmfails*1.0/10000
-    return
+    #return
     print sam.vote(0,0)
     print sam.vote(0,1)
     print sam.vote(0,2)
