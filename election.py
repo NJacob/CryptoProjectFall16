@@ -43,6 +43,7 @@ class Voter():#always register name with board before creating a new Voter
     def vote(self, m, candidate):
         em = self.electionboard
         if not em.check_registered(self):
+            exit("NOT REGISTERED")
             return False
         pubkey = em.get_public_key()
         n = pubkey[0]
@@ -91,6 +92,7 @@ class Voter():#always register name with board before creating a new Voter
             if not bb.check_response(self, ciphertext, v, w):
                 print 'FAILED ZKP{}'.format(m)
                 return False
+        print "A" * 200
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
 class CountingAuthority():
@@ -315,45 +317,62 @@ class ElectionBoard():
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
 def main():
-    #defs
-    em = ElectionBoard()
     #get list of non-empty candidate names
     candidates = open("candidates.txt", "r").readlines()
-    candidates = [c.strip() in candidates if c.strip() != ""]
+    candidates = [c.strip() for c in candidates if c.strip() != ""]
     if len(candidates) != len(set(candidates)):
         exit("Candidate list contained duplicates")
-    voters = []
-    for voter in open("voters.txt", "r"):
-        if voter.strip() != "":
-            voters.append(voter)
-    if len(voters) != len(set(voters)):
-        exit("Voter list contained duplicates")
-    for voter in voters:
-        em.register_voter(voter)
+    #create boards and make them aware of each other
+    em = ElectionBoard()
+    #inform election board of all valid voters
+    voters = {}
+    for voter_name in open("voters.txt", "r"):
+        voter_name = voter_name.strip()
+        if voter_name not in voters and voter_name != "":
+            voter = Voter(voter_name, em)
+            voters[voter_name] = voter
+            em.register_voter(voter)
+        else:
+            exit("Voter list contained duplicates or blanks")
+    #del(voters)
 
-    voters = []
+    bb = BulletinBoard(15, len(candidates))
+    linkboards(em, bb)
+
+    #sam = Voter('Sam', em)
+    #em.register_voter(sam)
+    #sam.vote(1,6)
+    #print em.get_results()
+    #return 
+
     print "VOTING PHASE: Each voter should enter a unique name and their vote."
     print "Enter a blank name to stop the voting process."
     while True:
         name = raw_input("Please enter your name: ")
         if name == "":
             break
-        voter = Voter(name, eb)
-        ballot = [-1] * len(candidates)
-        for candidate in candidates:
-            vote = int(raw_input("Would you like to vote for " + candidates[i] + "?"))
-            voter.vote(vote, candidate)
+        elif name not in voters:
+            print "You're not on the list"
+            break
+        vote = raw_input("Which candidate would you like to vote for? ")
+        if vote not in candidates:
+            print "You must vote for one of the candidates"
+            continue
+        ballot = [0]*len(candidates)
+        ballot[candidates.index(vote)] = 1
+        signatures = []
+        for [v,c] in zip(ballot, candidates): 
+            signatures.append(voter.vote(v,c))
+        print signatures
+    
+    
+    print em.get_results()
 
 
 
 
 
 def main_():
-    print [1, modinv(1,4), (1,4)]
-    print ['n', modinv(2,4), (2,4)]
-    print [3, modinv(3,4), (3,4)]
-    print [27, modinv(2,53), (2, 53)]
-    print [23, modinv(30,53), (30,53)]
     em = ElectionBoard()
     k = em.get_public_key()
     n = k[0]
@@ -369,7 +388,6 @@ def main_():
     print em.get_voters()
     bb = BulletinBoard(15, 10)
     linkboards(em, bb)
-    #return
     print sam.vote(0,0)
     print sam.vote(0,1)
     print sam.vote(0,2)
