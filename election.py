@@ -43,12 +43,12 @@ class Voter():#always register name with board before creating a new Voter
     def vote(self, m, candidate):
         em = self.electionboard
         if not em.check_registered(self):
+            print 'You are not a registered voter'
             return False
         pubkey = em.get_public_key()
         n = pubkey[0]
         g = pubkey[1]
         n2 = n**2
-        print 'Ptext={}'.format(m)
         r = random.randint(1, n)
         x = random.randint(1, n)
         while 1!=fractions.gcd(x, n):
@@ -57,14 +57,9 @@ class Voter():#always register name with board before creating a new Voter
             r = random.randint(1, n)
         ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
         signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n, self)*modinv(r, n))%n
-        print 'ctext={}'.format(ciphertext)
-        print 'signed ctext={}'.format(signedciphertext)
-        print 'unsigned ctext={}=?{}%n={}'.format(em.unsign(signedciphertext), ciphertext, ciphertext%n)
-        print 'decrypted ctext={}=?{}'.format(em.decrypt(ciphertext), m)
         bb = em.get_bulletin_board()
         numtests = bb.get_num_tests()
         for t in range(numtests):#ZKP
-            print 'test {}'.format(t)
             u = n2
             r = random.randint(1, n)
             s = random.randint(1, n)
@@ -76,11 +71,9 @@ class Voter():#always register name with board before creating a new Voter
                 while 1!=fractions.gcd(s, n):
                     s = random.randint(1, n)
                 u = (pow(g,r,n2)*pow(s,n,n2))%n2
-            print 'getting challenge for {}'.format(u)
             e = bb.generate_challenge(self, u)  
-            print 'challenge= {}'.format(e)
             if e is False:
-                print 'No challenge issued for {} from {}'.format(m, self.name)
+                print 'No challenge issued for ZKP from the bulletin board, vote dismissed'
                 return False
             v = r-e*m
             w = 0
@@ -89,7 +82,7 @@ class Voter():#always register name with board before creating a new Voter
             else:
                 w = (s*(pow(modinv(x,n2),e,n2)*pow(g,(v//n),n2)))%n2
             if not bb.check_response(self, ciphertext, v, w):
-                print 'FAILED ZKP{}'.format(m)
+                print 'Your vote failed the ZKP proof'
                 return False
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
@@ -98,6 +91,12 @@ class CountingAuthority():
 
     def __init__(self, em):
         self.electionboard = em
+
+    def check_results(self, vote):
+        res = 1
+        for v in vote:
+            res = res * v
+        return 1==self.electionboard.decrypt(res)
 
     def send_results(self, votes, numcandidates):
         res = [1 for c in range(numcandidates)]#E(v1)*E(v2)...
@@ -132,15 +131,19 @@ class BulletinBoard():
     def generate_challenge(self, voter, u):
         votername = voter.get_name()
         if not self.electionboard.check_registered(voter):
+            print 'You are not a registered voter'
             return False
         nt = self.numtests
-        if votername in self.voterdata.keys() and self.voterdata[votername][1] > 0:
-            nt = self.voterdata[votername][1]
+        nc = self.numcandidates
+        if votername in self.voterdata.keys():
+            nc = self.voterdata[votername][3]
+            if self.voterdata[votername][1] > 0:
+                nt = self.voterdata[votername][1]
         n = self.electionboard.get_public_key()[0]
         ret = random.randint(1, n)
         while 1!= fractions.gcd(ret, n) or 1!= fractions.gcd(ret, u):
             ret = random.randint(1, n)
-        self.voterdata[votername] = [u, nt, ret]
+        self.voterdata[votername] = [u, nt, ret, nc]
         return ret
 
     def check_response(self, voter, ciphertext, v, w):
@@ -158,10 +161,11 @@ class BulletinBoard():
             else:
                 gv = pow(g,v,n2)
             checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
-            print 'response= {}'.format(checkval)
             if u == checkval:
                 self.voterdata[votername][1] = self.voterdata[votername][1] - 1
                 return True
+            else:
+                self.voterdata[votername][1] = self.numtests
         return False
     
     def receive_encrypted_message(self, voter, ciphertext, signedciphertext, candidate):
@@ -169,14 +173,29 @@ class BulletinBoard():
         em = self.electionboard
         n = em.get_public_key()[0]
         unsignedtext = em.unsign(signedciphertext)
-        print 'unsigned text = {}=?{}%n=?{}'.format(unsignedtext, ciphertext, ciphertext%n)
         validvote = candidate < self.numcandidates and em.check_registered(voter) and unsignedtext==ciphertext%n
         validvote = validvote and votername in self.voterdata.keys() and self.voterdata[votername][1] <= 0
         if validvote:
             if votername not in self.votes.keys():
                 self.votes[votername] = [1 for c in range(self.numcandidates)]
-            self.votes[votername][candidate] = ciphertext
-            return True 
+            if self.voterdata[votername][3]> 0 and self.votes[votername][candidate] == 1:
+                self.votes[votername][candidate] = ciphertext
+                self.voterdata[votername][3] = self.voterdata[votername][3] - 1
+                if self.voterdata[votername][3] <= 0:
+                    if not self.check_if_voted(voter):
+                        self.votes.pop(votername, None)
+                        self.voterdata.pop(votername, None)
+                        print 'Your vote is invalid- it does not sum to 1, and has now been thrown out'
+                        return False
+                return True 
+        print 'Your vote is invalid- Either you are unregistered, your vote does not have a valid signature, or you did not prove ZKP'
+        print self.voterdata[votername]
+        return False
+
+    def check_if_voted(self, voter):
+        votername = voter.get_name()
+        if votername in self.votes.keys():
+            return self.countingauthority.check_results(self.votes[votername])
         return False
 
     def get_votes(self):
@@ -265,7 +284,7 @@ class ElectionBoard():
         return self.voters
 
     def register_voter(self, v):
-        if v not in self.voters:
+        if v not in self.voters and v.get_name() not in [voter.get_name() for voter in self.voters]:
             self.voters.append(v)
             return True
         return False
@@ -301,6 +320,9 @@ class ElectionBoard():
             ret.append(self.decrypt(t))
         return ret
 
+    def check_if_voted(self, voter):
+        return self.bulletinboard.check_if_voted(voter)
+
     def get_results(self):
         res = self.bulletinboard.get_results()
         maxvotes = 0
@@ -315,39 +337,41 @@ class ElectionBoard():
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
 def main():
-    print [1, modinv(1,4), (1,4)]
-    print ['n', modinv(2,4), (2,4)]
-    print [3, modinv(3,4), (3,4)]
-    print [27, modinv(2,53), (2, 53)]
-    print [23, modinv(30,53), (30,53)]
     em = ElectionBoard()
-    k = em.get_public_key()
-    n = k[0]
-    n2 = n**2
-    print k
-    print em.get_voters()
-    sam = Voter('Sam', em)
-    mark = Voter('Mark', em)
-    test = Voter('Test', em)
-    em.register_voter(sam)
-    em.register_voter(mark)
-    em.register_voter(test)
-    print em.get_voters()
-    bb = BulletinBoard(15, 10)
+    candidates = range(0,5)
+    numcandidates = len(candidates)
+    bb = BulletinBoard(15, numcandidates)
     linkboards(em, bb)
-    #return
-    print sam.vote(0,0)
-    print sam.vote(0,1)
-    print sam.vote(0,2)
-    print sam.vote(0,3)
-    print sam.vote(1,4)
-    print sam.vote(1,5)
-    print sam.vote(0,6)
-    print sam.vote(1,7)
-    print sam.vote(0,8)
-    print sam.vote(1,9)
-    print sam.vote(1,6)
-    print sam.vote(1,6)
+    v = 0
+    voters = {}
+    while v < 10:
+        vname =  raw_input('{}What is your name?\n'.format(v))
+        voter = Voter(vname, em)
+        if vname in voters.keys():
+            voter = voters[vname]
+        else:
+            voters[vname] = voter
+        em.register_voter(voter)
+        if em.check_if_voted(voter):
+            print 'A voter with this name has already voted'
+            v = v - 1
+        else:
+            c = 0
+            while c < numcandidates:
+                vote = int(raw_input('What is your vote for candidate {} (Enter 0 for no or 1 for yes)?\n'.format(candidates[c])))
+                if not voter.vote(vote, c):
+                    restart =  raw_input('Start your vote over (y/n)?')
+                    if restart == 'y':
+                        c = -1
+                    else:
+                        restart =  raw_input('Quit voting (y/n)?')
+                        if restart == 'y':
+                            c = numcandidates
+                            v = v-1
+                        else:
+                            c = c-1
+                c = c+1
+        v = v+1
     print em.get_results()
 
 if __name__ == '__main__':
