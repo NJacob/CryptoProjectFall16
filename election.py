@@ -94,7 +94,10 @@ class CountingAuthority():
         res = 1
         for v in vote:
             res = res * v
-        return 1==self.electionboard.decrypt(res)
+        d=self.electionboard.decrypt(res)
+        if d not in [0,1]:
+            d = 2
+        return d
 
     def send_results(self, votes, numcandidates):
         res = [1 for c in range(numcandidates)]#E(v1)*E(v2)...
@@ -106,6 +109,7 @@ class CountingAuthority():
 
 class BulletinBoard():
     numtests=5#number of times to run ZKP
+    numvotes=None#number of votes to accept
     electionboard = None
     countingauthority = None
     votes = {}#dict of votes, keyed by votername
@@ -119,6 +123,7 @@ class BulletinBoard():
     def set_election_board(self, em):
         self.electionboard = em
         self.countingauthority = CountingAuthority(self.electionboard)
+        self.numvotes = em.numvoters
 
     def set_counting_authority(self, ca):
         self.countingauthority = ca
@@ -177,11 +182,13 @@ class BulletinBoard():
                 self.votes[votername][candidate] = ciphertext
                 self.voterdata[votername][3] -= 1
                 if self.voterdata[votername][3] <= 0:
-                    if not self.check_if_voted(votername):
+                    if 1!=self.check_if_voted(votername):
                         self.votes.pop(votername, None)
                         self.voterdata.pop(votername, None)
                         print 'Your vote is invalid- it does not sum to 1, and has now been thrown out'
                         return False
+                    else:
+                        self.numvotes = self.numvotes -1
                 return True 
         print 'Your vote is invalid- Either you are unregistered, your vote does not have a valid signature, or you did not prove ZKP'
         print self.voterdata[votername]
@@ -190,20 +197,27 @@ class BulletinBoard():
     def check_if_voted(self, votername):
         if votername in self.votes:
             return self.countingauthority.check_results(self.votes[votername])
-        return False
+        return 0
 
     def get_votes(self):
         ret = []
+        validvotes = [0,1]
         for v in self.votes:
-            if self.check_if_voted(v):
+            if self.check_if_voted(v) in validvotes:
                 ret.append(self.votes[v])
         return ret
 
     def get_results(self):
-        return self.countingauthority.send_results(self.get_votes(), self.numcandidates)
+        if self.numvotes <= 0:
+            return self.countingauthority.send_results(self.get_votes(), self.numcandidates)
+        else:
+            print 'Not all votes are in yet. Getting results now is not allowed.'
+            return []
 
 class ElectionBoard():
     voters = []
+    numvoters = 5
+
     #public key:
     n = None    #product of p and q
     g = None    #generator (?)  random integer?
@@ -222,7 +236,7 @@ class ElectionBoard():
 
     bulletinboard = None
 
-    def __init__(self):#generate keys for PPKE and blindsign
+    def __init__(self, nv=5):#generate keys for PPKE and blindsign
         #generate primes p,q, such that p>q
         #  and (p-1)*(q-1) is coprime with p*q
         p = gmpy2.next_prime(500)
@@ -268,6 +282,7 @@ class ElectionBoard():
         self.u=u
         self.be=be
         self.bd=bd
+        self.numvoters=nv
 
     def set_bulletin_board(self, bb):
         self.bulletinboard = bb
@@ -315,8 +330,14 @@ class ElectionBoard():
             ret.append(self.decrypt(t))
         return ret
 
+    def check_finished(self):
+        bb = self.bulletinboard
+        if bb is not None:
+            return 0==bb.numvotes
+        return False
+
     def check_if_voted(self, voter):
-        return self.bulletinboard.check_if_voted(voter.get_name())
+        return 1==self.bulletinboard.check_if_voted(voter.get_name())
 
     def get_results(self):
         res = self.bulletinboard.get_results()
@@ -332,7 +353,7 @@ class ElectionBoard():
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
 def main():
-    em = ElectionBoard()
+    em = ElectionBoard(2)
     candidates = range(0,5)
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
@@ -343,7 +364,7 @@ def main():
     print 'Candidates and their numbers:'
     for cn in clist:
         print cn
-    while v < 2:
+    while not em.check_finished():#v < 2:
         vname =  raw_input('{}What is your name?\n'.format(v))
         voter = Voter(vname, em)
         if vname in voters:
