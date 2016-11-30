@@ -177,7 +177,7 @@ class BulletinBoard():
                 self.votes[votername][candidate] = ciphertext
                 self.voterdata[votername][3] -= 1
                 if self.voterdata[votername][3] <= 0:
-                    if not self.check_if_voted(voter):
+                    if not self.check_if_voted(votername):
                         self.votes.pop(votername, None)
                         self.voterdata.pop(votername, None)
                         print 'Your vote is invalid- it does not sum to 1, and has now been thrown out'
@@ -187,8 +187,7 @@ class BulletinBoard():
         print self.voterdata[votername]
         return False
 
-    def check_if_voted(self, voter):
-        votername = voter.get_name()
+    def check_if_voted(self, votername):
         if votername in self.votes:
             return self.countingauthority.check_results(self.votes[votername])
         return False
@@ -196,7 +195,8 @@ class BulletinBoard():
     def get_votes(self):
         ret = []
         for v in self.votes:
-            ret.append(self.votes[v])
+            if self.check_if_voted(v):
+                ret.append(self.votes[v])
         return ret
 
     def get_results(self):
@@ -316,7 +316,7 @@ class ElectionBoard():
         return ret
 
     def check_if_voted(self, voter):
-        return self.bulletinboard.check_if_voted(voter)
+        return self.bulletinboard.check_if_voted(voter.get_name())
 
     def get_results(self):
         res = self.bulletinboard.get_results()
