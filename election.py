@@ -307,6 +307,40 @@ class ElectionBoard():
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
 def main():
+    #defs
+    em = ElectionBoard()
+    #get list of non-empty candidate names
+    candidates = open("candidates.txt", "r").readlines()
+    candidates = [c.strip() in candidates if c.strip() != ""]
+    if len(candidates) != len(set(candidates)):
+        exit("Candidate list contained duplicates")
+    voters = []
+    for voter in open("voters.txt", "r"):
+        if voter.strip() != "":
+            voters.append(voter)
+    if len(voters) != len(set(voters)):
+        exit("Voter list contained duplicates")
+    for voter in voters:
+        em.register_voter(voter)
+
+    voters = []
+    print "VOTING PHASE: Each voter should enter a unique name and their vote."
+    print "Enter a blank name to stop the voting process."
+    while True:
+        name = raw_input("Please enter your name: ")
+        if name == "":
+            break
+        voter = Voter(name, eb)
+        ballot = [-1] * len(candidates)
+        for candidate in candidates:
+            vote = int(raw_input("Would you like to vote for " + candidates[i] + "?"))
+            voter.vote(vote, candidate)
+
+
+
+
+
+def main_():
     print [1, modinv(1,4), (1,4)]
     print ['n', modinv(2,4), (2,4)]
     print [3, modinv(3,4), (3,4)]
@@ -350,6 +384,8 @@ def main():
     print sam.vote(1,6)
     print sam.vote(1,6)
     print em.get_results()
+
+
 
 if __name__ == '__main__':
 	main()
