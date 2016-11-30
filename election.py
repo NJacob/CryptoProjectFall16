@@ -46,9 +46,6 @@ class Voter():#always register name with board before creating a new Voter
             print 'You are not a registered voter'
             return False
         [n, g] = em.get_public_key()
-        #pubkey = em.get_public_key()
-        #n = pubkey[0]
-        #g = pubkey[1]
         n2 = n**2
         r = random.randint(1, n)
         x = random.randint(1, n)
@@ -151,11 +148,6 @@ class BulletinBoard():
         votername = voter.get_name()
         if self.electionboard.check_registered(voter) and votername in self.voterdata.keys():
             [u, _, e, _] = self.voterdata[votername]
-            #u = self.voterdata[votername][0]
-            #e = self.voterdata[votername][2]
-            #k = self.electionboard.get_public_key()
-            #n = k[0]
-            #g = k[1]
             [n, g] = self.electionboard.get_public_key()
             n2 = n**2
             gv = 0
@@ -165,7 +157,6 @@ class BulletinBoard():
                 gv = pow(g,v,n2)
             checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
             if u == checkval:
-                #self.voterdata[votername][1] = self.voterdata[votername][1] - 1
                 self.voterdata[votername][1] -= 1
                 return True
             else:
@@ -178,13 +169,12 @@ class BulletinBoard():
         n = em.get_public_key()[0]
         unsignedtext = em.unsign(signedciphertext)
         validvote = candidate < self.numcandidates and em.check_registered(voter) and unsignedtext==ciphertext%n
-        validvote = validvote and votername in self.voterdata.keys() and self.voterdata[votername][1] <= 0
+        validvote = validvote and votername in self.voterdata and self.voterdata[votername][1] <= 0
         if validvote:
-            if votername not in self.votes.keys():
+            if votername not in self.votes:
                 self.votes[votername] = [1 for c in range(self.numcandidates)]
             if self.voterdata[votername][3]> 0 and self.votes[votername][candidate] == 1:
                 self.votes[votername][candidate] = ciphertext
-                #self.voterdata[votername][3] = self.voterdata[votername][3] - 1
                 self.voterdata[votername][3] -= 1
                 if self.voterdata[votername][3] <= 0:
                     if not self.check_if_voted(voter):
@@ -345,11 +335,15 @@ def main():
     em = ElectionBoard()
     candidates = range(0,5)
     numcandidates = len(candidates)
+    clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
     linkboards(em, bb)
     v = 0
     voters = {}
-    while v < 10:
+    print 'Candidates and their numbers:'
+    for cn in clist:
+        print cn
+    while v < 2:
         vname =  raw_input('{}What is your name?\n'.format(v))
         voter = Voter(vname, em)
         if vname in voters.keys():
@@ -361,23 +355,49 @@ def main():
             print 'A voter with this name has already voted'
             v = v - 1
         else:
-            c = 0
-            while c < numcandidates:
-                vote = int(raw_input('What is your vote for candidate {} (Enter 0 for no or 1 for yes)?\n'.format(candidates[c])))
-                if not voter.vote(vote, c):
-                    restart =  raw_input('Start your vote over (y/n)?')
-                    if restart == 'y':
-                        c = -1
-                    else:
-                        restart =  raw_input('Quit voting (y/n)?')
+            vote = -2
+            while vote not in range(-1, numcandidates):
+                vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
+                if vote not in range(-1, numcandidates):
+                    print 'That candidate does not exist'
+                if vote == -1:
+                    print 'Candidates and their numbers:'
+                    for cn in clist:
+                        print cn
+                    vote = -2
+            else:
+                votes = [0 for c in range(numcandidates)]
+                votes[vote] = 1
+                c = 0
+                while c < numcandidates:
+                    if not voter.vote(votes[c], c):
+                        print 'Forcing system to restart your vote by invalidating your vote...'
+                        for c2 in range(c+1, numcandidates):
+                            voter.vote(1, c2)
+                        restart =  raw_input('Try voting again (y/n)?')
                         if restart == 'y':
+                            c = -1
+                            vote = -2
+                            while vote not in range(-1, numcandidates):
+                                vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
+                                if vote not in range(-1, numcandidates):
+                                    print 'That candidate does not exist'
+                                if vote == -1:
+                                    print 'Candidates and their numbers:'
+                                    for cn in clist:
+                                        print cn
+                                    vote = -2
+                            votes = [0 for c in range(numcandidates)]
+                            votes[vote] = 1
+                        else:
                             c = numcandidates
                             v = v-1
-                        else:
-                            c = c-1
-                c = c+1
+                    c = c+1
         v = v+1
-    print em.get_results()
+    results= em.get_results()
+    print 'The following candidate(s) won with {} votes:'.format(results[2])
+    for c in results[1]:
+        print '\t{}:{}'.format(c, candidates[c])
 
 if __name__ == '__main__':
 	main()
