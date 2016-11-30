@@ -3,6 +3,8 @@ import math
 import random
 import gmpy2
 import fractions
+from Tkinter import *
+import Tkinter as tk
 
 def linkboards(em, bb):
     em.set_bulletin_board(bb)
@@ -29,10 +31,33 @@ def modinv(a, b):
         ret = (v[0][1]-y*v[1][1])%b
     return ret
 
+def initializeGUI(candidates):
+    root = Tk()
+    root.title("Vote Now")
+    mainframe = Frame(root)
+    mainframe.grid(column=0,row=0, sticky=(N,W,E,S) )
+    mainframe.columnconfigure(0, weight = 1)
+    mainframe.rowconfigure(0, weight = 1)
+    mainframe.pack(pady = 10, padx = 10)
+    var = StringVar(root)
+    # Use dictionary to map names to ages.
+    choices = dict()
+    for a in candidates:
+        choices[a] = a
+
+    option = OptionMenu(mainframe, var, *choices)
+    var.set('0')
+
+    option.grid(row = 1, column =1)
+    Label(mainframe, text="Voter Name").grid(row = 2, column = 1)
+    name = StringVar()
+    name_ent = Entry(mainframe, text=name, width = 15).grid(column = 2, row = 2)
+    root.mainloop()
+
 class Voter():#always register name with board before creating a new Voter
     name = None
     electionboard = None
-    
+
     def __init__(self, name, em):
         self.name = name
         self.electionboard = em#election board to vote with
@@ -69,7 +94,7 @@ class Voter():#always register name with board before creating a new Voter
                 while 1!=fractions.gcd(s, n):
                     s = random.randint(1, n)
                 u = (pow(g,r,n2)*pow(s,n,n2))%n2
-            e = bb.generate_challenge(self, u)  
+            e = bb.generate_challenge(self, u)
             if e is False:
                 print 'No challenge issued for ZKP from the bulletin board, vote dismissed'
                 return False
@@ -115,7 +140,7 @@ class BulletinBoard():
     votes = {}#dict of votes, keyed by votername
     voterdata = {}#stores data used in ZKP to check when necessary
     numcandidates = 1
-    
+
     def __init__(self, nt=5, nc=1):
         self.numtests = nt
         self.numcandidates = nc
@@ -157,7 +182,7 @@ class BulletinBoard():
             n2 = n**2
             gv = 0
             if v < 0:
-                gv = pow(modinv(g, n2),(0-v),n2) 
+                gv = pow(modinv(g, n2),(0-v),n2)
             else:
                 gv = pow(g,v,n2)
             checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
@@ -167,7 +192,7 @@ class BulletinBoard():
             else:
                 self.voterdata[votername][1] = self.numtests
         return False
-    
+
     def receive_encrypted_message(self, voter, ciphertext, signedciphertext, candidate):
         votername = voter.get_name()
         em = self.electionboard
@@ -189,7 +214,7 @@ class BulletinBoard():
                         return False
                     else:
                         self.numvotes = self.numvotes -1
-                return True 
+                return True
         print 'Your vote is invalid- Either you are unregistered, your vote does not have a valid signature, or you did not prove ZKP'
         print self.voterdata[votername]
         return False
@@ -317,14 +342,14 @@ class ElectionBoard():
         d = self.bd
         return pow(message,d,n)
 
-    def decrypt(self, message): 
+    def decrypt(self, message):
         n = self.n
         n2 = n**2
         c = pow(message,self.lam,n2)
         lc = (c-1)//n
         return (lc*self.u)%n
 
-    def decrypt_results(self, tallies): 
+    def decrypt_results(self, tallies):
         ret = []
         for t in tallies:
             ret.append(self.decrypt(t))
@@ -355,6 +380,7 @@ class ElectionBoard():
 def main():
     em = ElectionBoard(2)
     candidates = range(0,5)
+    initializeGUI(candidates)
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
