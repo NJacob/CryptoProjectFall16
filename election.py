@@ -3,6 +3,7 @@ import math
 import random
 import gmpy2
 import fractions
+import sys
 from Tkinter import *
 import Tkinter as tk
 
@@ -415,7 +416,7 @@ def initializeGUI(candidates):
     return(candidate, voter)
 
 def mainGUI():
-    em = ElectionBoard(2)   #Number of voters to trigger completion
+    em = ElectionBoard(int(sys.argv[1]))   #Number of voters to trigger completion
     f = open("candidates.txt", "r")
     candidates = [c.strip() for c in f if c.strip() != ""]
     f.close()
@@ -457,7 +458,7 @@ def mainGUI():
 
 
 def main():
-    em = ElectionBoard(2)   #Number of voters to trigger completion
+    em = ElectionBoard(sys.argv[1])   #Number of voters to trigger completion
     f = open("candidates.txt", "r")
     candidates = [c.strip() for c in f if c.strip() != ""]
     f.close()
@@ -534,4 +535,7 @@ def main():
 
 if __name__ == '__main__':
 	#main()
-    mainGUI()
+    if(len(sys.argv) > 1):
+        mainGUI()
+    else:
+        print "Please enter the number of voters!"
