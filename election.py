@@ -5,10 +5,13 @@ import gmpy2
 import fractions
 
 def linkboards(em, bb):
+    #Give the bulletin board and election boards a handle to each other
     em.set_bulletin_board(bb)
     bb.set_election_board(em)
 
 def modinv(a, b):
+    #Modular multiplicative inverse
+    #Find some `ret` such that `a`*`ret` = 1 mod `b`
     ret = None
     if a==1:
         ret = 1
@@ -30,6 +33,8 @@ def modinv(a, b):
     return ret
 
 class Voter():#always register name with board before creating a new Voter
+    #Encrypt a 0 or 1 vote for any candidate w/ Paillier PKC
+
     name = None
     electionboard = None
     
@@ -41,6 +46,8 @@ class Voter():#always register name with board before creating a new Voter
         return self.name
 
     def vote(self, m, candidate):
+        #Use Election Board's public key to encrypt using Paillier PKC
+        #returns True or False to indicate success
         em = self.electionboard
         if not em.check_registered(self):
             print 'You are not a registered voter'
@@ -55,6 +62,7 @@ class Voter():#always register name with board before creating a new Voter
             r = random.randint(1, n)
         ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
         signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n, self)*modinv(r, n))%n
+        #Respond to Bulletin Board's challenges to prove we know the plaintext
         bb = em.get_bulletin_board()
         numtests = bb.get_num_tests()
         for t in range(numtests):#ZKP
@@ -85,6 +93,8 @@ class Voter():#always register name with board before creating a new Voter
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
 class CountingAuthority():
+    #Add up all the votes that were cast (because Paillier is homomorphic)
+    #Send the encrypted sum to the election board to decrypt
     electionboard = None
 
     def __init__(self, em):
@@ -105,6 +115,9 @@ class CountingAuthority():
         return ret
 
 class BulletinBoard():
+    #Keep track of every voter's vote ciphertext
+    #Verify each voter encrypted their vote using ZKP
+
     numtests=5#number of times to run ZKP
     electionboard = None
     countingauthority = None
@@ -126,7 +139,12 @@ class BulletinBoard():
     def get_num_tests(self):
         return self.numtests
 
+    #Challenge the voter with details about their vote they could only know
+    # if they know the plaintext vote
+    #Falsely verifies an imposter approximately once every n**`nt` times
+
     def generate_challenge(self, voter, u):
+        #generate a problem only the true voter would know
         votername = voter.get_name()
         if not self.electionboard.check_registered(voter):
             print 'You are not a registered voter'
@@ -145,6 +163,7 @@ class BulletinBoard():
         return ret
 
     def check_response(self, voter, ciphertext, v, w):
+        #make sure the voter passes this test
         votername = voter.get_name()
         if self.electionboard.check_registered(voter) and votername in self.voterdata.keys():
             [u, _, e, _] = self.voterdata[votername]
@@ -164,6 +183,7 @@ class BulletinBoard():
         return False
     
     def receive_encrypted_message(self, voter, ciphertext, signedciphertext, candidate):
+        #Process a Voter's vote
         votername = voter.get_name()
         em = self.electionboard
         n = em.get_public_key()[0]
@@ -203,6 +223,9 @@ class BulletinBoard():
         return self.countingauthority.send_results(self.get_votes(), self.numcandidates)
 
 class ElectionBoard():
+    #Allow voters to encrypt their vote w/ the public key
+    #Decrypt final counts at the end
+
     voters = []
     #public key:
     n = None    #product of p and q
@@ -243,7 +266,7 @@ class ElectionBoard():
         while 1!=fractions.gcd(be, lam) or bd is None:
             be = random.randint(1, lam)
             bd = modinv(be, lam)
-        lam = lam/fractions.gcd(p-1,q-1)  # least common multiple ?
+        lam = lam/fractions.gcd(p-1,q-1)  # least common multiple
         u = None
         g = None
         while u is None:
@@ -252,8 +275,7 @@ class ElectionBoard():
                 a = random.randint(1, n)
                 b = random.randint(1, n)
                 g = ((a*n+1)*pow(b, n, n2))%n2
-                #g = random.randint(1, n2)      #why was this changed?
-                #   ensure u and n are coprime
+                #ensure u and n are coprime
             u = (pow(g,lam,n2)-1)//n
             if (fractions.gcd(u, n)) != 1:
                 print "This shouldn't happen"
@@ -333,7 +355,10 @@ class ElectionBoard():
 
 def main():
     em = ElectionBoard()
-    candidates = range(0,5)
+    f = open("candidates.txt", "r")
+    candidates = [c.strip() for c in f if c.strip() != ""]
+    f.close()
+
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
