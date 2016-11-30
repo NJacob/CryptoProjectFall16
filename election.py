@@ -381,6 +381,8 @@ class ElectionBoard():
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
 def initializeGUI(candidates):
+    candidate = ""
+    voter = ""
     root = Tk()
     root.title("Voting")
     mainframe = Frame(root)
@@ -392,7 +394,6 @@ def initializeGUI(candidates):
     choices = dict()
     for a in range(0, len(candidates)):
         choices[candidates[a]] = a
-    print choices
     if(len(candidates)):
         var.set(candidates[0])
     else:
@@ -404,22 +405,20 @@ def initializeGUI(candidates):
     name = StringVar(root)
     name_ent = Entry(mainframe, text=name, width = 15).grid(column = 2, row = 2)
     def enter():
-        print "value is", var.get()
-        print "name is ", name.get()
-        return (var.get(), name.get())
         root.destroy()
 
     button = Button(root, text="Vote", command=enter)
-    print "name is ",name.get()
     button.pack()
     root.mainloop()
+    candidate = var.get()
+    voter = name.get()
+    return(candidate, voter)
 
 def mainGUI():
     em = ElectionBoard(2)   #Number of voters to trigger completion
     f = open("candidates.txt", "r")
     candidates = [c.strip() for c in f if c.strip() != ""]
     f.close()
-    cand_dict = dict()
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
@@ -431,9 +430,8 @@ def mainGUI():
         print cn
 
     while not em.check_finished():
-        (candidate, voter) = initializeGUI(candidates)
-        print "candidate here is ",candidate
-        if len(voter.strip()) == 0:
+        (candidate, vname) = initializeGUI(candidates)
+        if len(vname.strip()) == 0:
             print 'Not a valid name'
             continue
         voter = Voter(vname, em)
@@ -445,16 +443,11 @@ def mainGUI():
         if em.check_if_voted(voter):
             print 'A voter with this name has already voted'
             continue
-        vote = -2
         votes = [0]*numcandidates
-        votes[candidates.get(candidate)] = 1
-        c = 0
-        while c < numcandidates:
-            if not voter.vote(votes[c], c):
-                print 'Forcing system to restart your vote by invalidating your vote...'
-            for c2 in range(c+1, numcandidates):
-                voter.vote(1, c2)
-            c += 1
+        votes[candidates.index(candidate)] = 1
+        print votes
+        for c in range(0, numcandidates):
+            voter.vote(votes[c], c)
     results= em.get_results()
     print 'The following candidate(s) won with {} votes:'.format(results[2])
     for c in results[1]:
