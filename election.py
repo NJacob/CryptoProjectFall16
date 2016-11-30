@@ -3,6 +3,8 @@ import math
 import random
 import gmpy2
 import fractions
+from Tkinter import *
+import Tkinter as tk
 
 def linkboards(em, bb):
     #Give the bulletin board and election boards a handle to each other
@@ -32,12 +34,13 @@ def modinv(a, b):
         ret = (v[0][1]-y*v[1][1])%b
     return ret
 
+
 class Voter():#always register name with board before creating a new Voter
     #Encrypt a 0 or 1 vote for any candidate w/ Paillier PKC
 
     name = None
     electionboard = None
-    
+
     def __init__(self, name, em):
         self.name = name
         self.electionboard = em#election board to vote with
@@ -77,7 +80,7 @@ class Voter():#always register name with board before creating a new Voter
                 while 1!=fractions.gcd(s, n):
                     s = random.randint(1, n)
                 u = (pow(g,r,n2)*pow(s,n,n2))%n2
-            e = bb.generate_challenge(self, u)  
+            e = bb.generate_challenge(self, u)
             if e is False:
                 print 'No challenge issued for ZKP from the bulletin board, vote dismissed'
                 return False
@@ -128,7 +131,7 @@ class BulletinBoard():
     votes = {}#dict of votes, keyed by votername
     voterdata = {}#stores data used in ZKP to check when necessary
     numcandidates = 1
-    
+
     def __init__(self, nt=5, nc=1):
         self.numtests = nt
         self.numcandidates = nc
@@ -176,7 +179,7 @@ class BulletinBoard():
             n2 = n**2
             gv = 0
             if v < 0:
-                gv = pow(modinv(g, n2),(0-v),n2) 
+                gv = pow(modinv(g, n2),(0-v),n2)
             else:
                 gv = pow(g,v,n2)
             checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
@@ -186,7 +189,7 @@ class BulletinBoard():
             else:
                 self.voterdata[votername][1] = self.numtests
         return False
-    
+
     def receive_encrypted_message(self, voter, ciphertext, signedciphertext, candidate):
         #Process a Voter's vote
         votername = voter.get_name()
@@ -209,7 +212,7 @@ class BulletinBoard():
                         return False
                     else:
                         self.numvotes = self.numvotes -1
-                return True 
+                return True
         print 'Your vote is invalid- Either you are unregistered, your vote does not have a valid signature, or you did not prove ZKP'
         print self.voterdata[votername]
         return False
@@ -342,14 +345,14 @@ class ElectionBoard():
         d = self.bd
         return pow(message,d,n)
 
-    def decrypt(self, message): 
+    def decrypt(self, message):
         n = self.n
         n2 = n**2
         c = pow(message,self.lam,n2)
         lc = (c-1)//n
         return (lc*self.u)%n
 
-    def decrypt_results(self, tallies): 
+    def decrypt_results(self, tallies):
         ret = []
         for t in tallies:
             ret.append(self.decrypt(t))
@@ -377,12 +380,94 @@ class ElectionBoard():
                 indices.append(r)
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
+def initializeGUI(candidates):
+    root = Tk()
+    root.title("Voting")
+    mainframe = Frame(root)
+    mainframe.grid(column=0,row=0, sticky=(N,W,E,S) )
+    mainframe.columnconfigure(0, weight = 1)
+    mainframe.rowconfigure(0, weight = 1)
+    mainframe.pack(pady = 10, padx = 10)
+    var = StringVar(root)
+    choices = dict()
+    for a in range(0, len(candidates)):
+        choices[candidates[a]] = a
+    print choices
+    if(len(candidates)):
+        var.set(candidates[0])
+    else:
+        var.set('A')
+    option = OptionMenu(mainframe, var, *candidates)
+    option.pack()
+    option.grid(row = 1, column =1)
+    Label(mainframe, text="Name").grid(row = 2, column = 1)
+    name = StringVar(root)
+    name_ent = Entry(mainframe, text=name, width = 15).grid(column = 2, row = 2)
+    def enter():
+        print "value is", var.get()
+        print "name is ", name.get()
+        return (var.get(), name.get())
+        root.destroy()
+
+    button = Button(root, text="Vote", command=enter)
+    print "name is ",name.get()
+    button.pack()
+    root.mainloop()
+
+def mainGUI():
+    em = ElectionBoard(2)   #Number of voters to trigger completion
+    f = open("candidates.txt", "r")
+    candidates = [c.strip() for c in f if c.strip() != ""]
+    f.close()
+    cand_dict = dict()
+    numcandidates = len(candidates)
+    clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
+    bb = BulletinBoard(15, numcandidates)
+    linkboards(em, bb)
+    v = 0
+    voters = {}
+    print 'Candidates and their numbers:'
+    for cn in clist:
+        print cn
+
+    while not em.check_finished():
+        (candidate, voter) = initializeGUI(candidates)
+        print "candidate here is ",candidate
+        if len(voter.strip()) == 0:
+            print 'Not a valid name'
+            continue
+        voter = Voter(vname, em)
+        if vname in voters:
+            voter = voters[vname]
+        else:
+            voters[vname] = voter
+        em.register_voter(voter)
+        if em.check_if_voted(voter):
+            print 'A voter with this name has already voted'
+            continue
+        vote = -2
+        votes = [0]*numcandidates
+        votes[candidates.get(candidate)] = 1
+        c = 0
+        while c < numcandidates:
+            if not voter.vote(votes[c], c):
+                print 'Forcing system to restart your vote by invalidating your vote...'
+            for c2 in range(c+1, numcandidates):
+                voter.vote(1, c2)
+            c += 1
+    results= em.get_results()
+    print 'The following candidate(s) won with {} votes:'.format(results[2])
+    for c in results[1]:
+        print '\t{}:{}'.format(c, candidates[c])
+
+
+
+
 def main():
     em = ElectionBoard(2)   #Number of voters to trigger completion
     f = open("candidates.txt", "r")
     candidates = [c.strip() for c in f if c.strip() != ""]
     f.close()
-
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
@@ -393,7 +478,10 @@ def main():
     for cn in clist:
         print cn
     while not em.check_finished():#v < 2:
-        vname =  raw_input('{}What is your name?\n'.format(v))
+        vname =  raw_input('What is your name?\n')
+        if len(vname.strip()) == 0:
+            print 'Not a valid name'
+            continue
         voter = Voter(vname, em)
         if vname in voters:
             voter = voters[vname]
@@ -405,7 +493,11 @@ def main():
             continue
         vote = -2
         while not -1 <= vote < numcandidates:
-            vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
+            str_vote = raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n')
+            if str_vote.isdigit():
+                vote = int(str_vote)
+            else:
+                print "Invalid candidate specified"
             if not -1 <= vote < numcandidates:
                 print 'That candidate does not exist'
             if vote == -1:
@@ -448,4 +540,5 @@ def main():
         print '\t{}:{}'.format(c, candidates[c])
 
 if __name__ == '__main__':
-	main()
+	#main()
+    mainGUI()
