@@ -346,54 +346,53 @@ def main():
     while v < 2:
         vname =  raw_input('{}What is your name?\n'.format(v))
         voter = Voter(vname, em)
-        if vname in voters.keys():
+        if vname in voters:
             voter = voters[vname]
         else:
             voters[vname] = voter
         em.register_voter(voter)
         if em.check_if_voted(voter):
             print 'A voter with this name has already voted'
-            v = v - 1
+            continue
+        vote = -2
+        while not -1 <= vote < numcandidates:
+            vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
+            if not -1 <= vote < numcandidates:
+                print 'That candidate does not exist'
+            if vote == -1:
+                print 'Candidates and their numbers:'
+                for cn in clist:
+                    print cn
+                vote = -2
         else:
-            vote = -2
-            while vote not in range(-1, numcandidates):
-                vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
-                if vote not in range(-1, numcandidates):
-                    print 'That candidate does not exist'
-                if vote == -1:
-                    print 'Candidates and their numbers:'
-                    for cn in clist:
-                        print cn
-                    vote = -2
-            else:
-                votes = [0 for c in range(numcandidates)]
-                votes[vote] = 1
-                c = 0
-                while c < numcandidates:
-                    if not voter.vote(votes[c], c):
-                        print 'Forcing system to restart your vote by invalidating your vote...'
-                        for c2 in range(c+1, numcandidates):
-                            voter.vote(1, c2)
-                        restart =  raw_input('Try voting again (y/n)?')
-                        if restart == 'y':
-                            c = -1
-                            vote = -2
-                            while vote not in range(-1, numcandidates):
-                                vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
-                                if vote not in range(-1, numcandidates):
-                                    print 'That candidate does not exist'
-                                if vote == -1:
-                                    print 'Candidates and their numbers:'
-                                    for cn in clist:
-                                        print cn
-                                    vote = -2
-                            votes = [0 for c in range(numcandidates)]
-                            votes[vote] = 1
-                        else:
-                            c = numcandidates
-                            v = v-1
-                    c = c+1
-        v = v+1
+            votes = [0]*numcandidates
+            votes[vote] = 1
+            c = 0
+            while c < numcandidates:
+                if not voter.vote(votes[c], c):
+                    print 'Forcing system to restart your vote by invalidating your vote...'
+                    for c2 in range(c+1, numcandidates):
+                        voter.vote(1, c2)
+                    restart =  raw_input('Try voting again (y/n)?')
+                    if restart == 'y':
+                        c = -1
+                        vote = -2
+                        while not -1 <= vote < numcandidates:
+                            vote = int(raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n'))
+                            if not -1 <= vote < numcandidates:
+                                print 'That candidate does not exist'
+                            if vote == -1:
+                                print 'Candidates and their numbers:'
+                                for cn in clist:
+                                    print cn
+                                vote = -2
+                        votes = [0]*numcandidates
+                        votes[vote] = 1
+                    else:
+                        c = numcandidates
+                        v -= 1
+                c += 1
+        v += 1
     results= em.get_results()
     print 'The following candidate(s) won with {} votes:'.format(results[2])
     for c in results[1]:
