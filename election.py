@@ -406,13 +406,14 @@ def initializeGUI(candidates):
     def enter():
         print "value is", var.get()
         print "name is ", name.get()
-        return (var.get(), name.get())
         root.destroy()
 
     button = Button(root, text="Vote", command=enter)
+    results = (var.get(), name.get())
     print "name is ",name.get()
     button.pack()
     root.mainloop()
+    return results
 
 def mainGUI():
     em = ElectionBoard(2)   #Number of voters to trigger completion
