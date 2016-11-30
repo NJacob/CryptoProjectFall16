@@ -293,6 +293,9 @@ class ElectionBoard():
     def get_voters(self):
         return self.voters
 
+    def get_voternames(self):
+        return [v.get_name() for v in self.voters]
+
     def register_voter(self, v):
         if v not in self.voters and v.get_name() not in [voter.get_name() for voter in self.voters]:
             self.voters.append(v)
