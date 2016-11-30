@@ -42,7 +42,7 @@ class Voter():#always register name with board before creating a new Voter
 
     def vote(self, m, candidate):
         em = self.electionboard
-        if not em.check_registered(self.name):
+        if not em.check_registered(self):
             return False
         pubkey = em.get_public_key()
         n = pubkey[0]
@@ -56,7 +56,7 @@ class Voter():#always register name with board before creating a new Voter
         while 1!=fractions.gcd(r, n):
             r = random.randint(1, n)
         ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
-        signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n)*modinv(r, n))%n
+        signedciphertext = (em.blind_sign((ciphertext*em.unsign(r))%n, self)*modinv(r, n))%n
         print 'ctext={}'.format(ciphertext)
         print 'signed ctext={}'.format(signedciphertext)
         print 'unsigned ctext={}=?{}%n={}'.format(em.unsign(signedciphertext), ciphertext, ciphertext%n)
@@ -84,17 +84,11 @@ class Voter():#always register name with board before creating a new Voter
                 return False
             v = r-e*m
             w = 0
-            gv = 0
             if v < 0:
-                gv = pow(modinv(g, n2),(0-v),n2) 
                 w = (s*(pow(modinv(x,n2),e,n2)*pow(modinv(g, n2),((0-v)//n),n2)))%n2
             else:
-                gv = pow(g,v,n2)
                 w = (s*(pow(modinv(x,n2),e,n2)*pow(g,(v//n),n2)))%n2
-                #w = (s*(pow(modinv(x,n2),e,n2)*pow(modinv(g, n2),(v//n),n2)))%n2
-            checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
-            print 'response= {}'.format(checkval)
-            if not bb.check_response(self, checkval):
+            if not bb.check_response(self, ciphertext, v, w):
                 print 'FAILED ZKP{}'.format(m)
                 return False
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
@@ -137,22 +131,34 @@ class BulletinBoard():
 
     def generate_challenge(self, voter, u):
         votername = voter.get_name()
-        if not self.electionboard.check_registered(votername):
+        if not self.electionboard.check_registered(voter):
             return False
         nt = self.numtests
         if votername in self.voterdata.keys() and self.voterdata[votername][1] > 0:
             nt = self.voterdata[votername][1]
-        self.voterdata[votername] = [u, nt]
         n = self.electionboard.get_public_key()[0]
         ret = random.randint(1, n)
         while 1!= fractions.gcd(ret, n) or 1!= fractions.gcd(ret, u):
             ret = random.randint(1, n)
+        self.voterdata[votername] = [u, nt, ret]
         return ret
 
-    def check_response(self, voter, checkval):
+    def check_response(self, voter, ciphertext, v, w):
         votername = voter.get_name()
-        if self.electionboard.check_registered(votername) and votername in self.voterdata.keys():
+        if self.electionboard.check_registered(voter) and votername in self.voterdata.keys():
             u = self.voterdata[votername][0]
+            e = self.voterdata[votername][2]
+            k = self.electionboard.get_public_key()
+            n = k[0]
+            g = k[1]
+            n2 = n**2
+            gv = 0
+            if v < 0:
+                gv = pow(modinv(g, n2),(0-v),n2) 
+            else:
+                gv = pow(g,v,n2)
+            checkval = (gv*pow(ciphertext,e,n2)*pow(w,n,n2))%(n2)
+            print 'response= {}'.format(checkval)
             if u == checkval:
                 self.voterdata[votername][1] = self.voterdata[votername][1] - 1
                 return True
@@ -164,7 +170,7 @@ class BulletinBoard():
         n = em.get_public_key()[0]
         unsignedtext = em.unsign(signedciphertext)
         print 'unsigned text = {}=?{}%n=?{}'.format(unsignedtext, ciphertext, ciphertext%n)
-        validvote = candidate < self.numcandidates and em.check_registered(votername) and unsignedtext==ciphertext%n
+        validvote = candidate < self.numcandidates and em.check_registered(voter) and unsignedtext==ciphertext%n
         validvote = validvote and votername in self.voterdata.keys() and self.voterdata[votername][1] <= 0
         if validvote:
             if votername not in self.votes.keys():
@@ -270,7 +276,9 @@ class ElectionBoard():
     def get_public_key(self):
         return (self.n, self.g)
 
-    def blind_sign(self, message):
+    def blind_sign(self, message, voter):
+        if voter not in self.voters:
+            return False
         n = self.n
         e = self.be
         return pow(message,e,n)
@@ -352,24 +360,15 @@ def main_():
     n2 = n**2
     print k
     print em.get_voters()
-    em.register_voter('Sam')
-    em.register_voter('Mark')
-    em.register_voter('Test')
-    print em.get_voters()
     sam = Voter('Sam', em)
     mark = Voter('Mark', em)
     test = Voter('Test', em)
+    em.register_voter(sam)
+    em.register_voter(mark)
+    em.register_voter(test)
+    print em.get_voters()
     bb = BulletinBoard(15, 10)
     linkboards(em, bb)
-    numfails = 0
-    numhmfails = 0
-    for i in range(0, 1000):
-        s = em.blind_sign(i)
-        u = em.unsign(s)
-        if u != i:
-            print ['FAIL', i, s, u]
-            numfails = numfails +1
-    print numfails, numfails*1.0/10
     #return
     print sam.vote(0,0)
     print sam.vote(0,1)
