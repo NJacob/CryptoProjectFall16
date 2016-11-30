@@ -3,8 +3,8 @@ import math
 import random
 import gmpy2
 import fractions
+import sys
 from Tkinter import *
-import Tkinter as tk
 
 def linkboards(em, bb):
     #Give the bulletin board and election boards a handle to each other
@@ -381,6 +381,8 @@ class ElectionBoard():
         return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
 
 def initializeGUI(candidates):
+    candidate = ""
+    voter = ""
     root = Tk()
     root.title("Voting")
     mainframe = Frame(root)
@@ -392,11 +394,10 @@ def initializeGUI(candidates):
     choices = dict()
     for a in range(0, len(candidates)):
         choices[candidates[a]] = a
-    print choices
     if(len(candidates)):
         var.set(candidates[0])
     else:
-        var.set('A')
+        var.set(candidates[0])
     option = OptionMenu(mainframe, var, *candidates)
     option.pack()
     option.grid(row = 1, column =1)
@@ -404,38 +405,43 @@ def initializeGUI(candidates):
     name = StringVar(root)
     name_ent = Entry(mainframe, text=name, width = 15).grid(column = 2, row = 2)
     def enter():
-        print "value is", var.get()
-        print "name is ", name.get()
         root.destroy()
 
     button = Button(root, text="Vote", command=enter)
-    results = (var.get(), name.get())
-    print "name is ",name.get()
     button.pack()
     root.mainloop()
-    return results
+    candidate = var.get()
+    voter = name.get()
+    return(candidate, voter)
 
-def mainGUI():
-    em = ElectionBoard(2)   #Number of voters to trigger completion
-    f = open("candidates.txt", "r")
-    candidates = [c.strip() for c in f if c.strip() != ""]
-    f.close()
-    cand_dict = dict()
+def alertGUI(title, msg):
+    app = Tk()
+    app.title(title)
+
+    def quit():
+        app.destroy()
+
+    var = StringVar()
+    label = Message( app, textvariable=var)
+    var.set(msg)
+
+    B = Button(app, text="Ok", command=quit)
+    label.pack()
+    B.pack()
+    app.mainloop()
+
+def mainGUI(candidates, num_voters):
+    em = ElectionBoard(num_voters)   #Number of voters will trigger completion
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
     linkboards(em, bb)
-    v = 0
     voters = {}
-    print 'Candidates and their numbers:'
-    for cn in clist:
-        print cn
 
     while not em.check_finished():
-        (candidate, voter) = initializeGUI(candidates)
-        print "candidate here is ",candidate
-        if len(voter.strip()) == 0:
-            print 'Not a valid name'
+        (candidate, vname) = initializeGUI(candidates)
+        if len(vname.strip()) == 0:
+            alertGUI("Error: Invalid Name", "Try a different name")
             continue
         voter = Voter(vname, em)
         if vname in voters:
@@ -444,31 +450,20 @@ def mainGUI():
             voters[vname] = voter
         em.register_voter(voter)
         if em.check_if_voted(voter):
-            print 'A voter with this name has already voted'
+            alertGUI("Error: Duplicate Name", "Try a different name")
             continue
-        vote = -2
         votes = [0]*numcandidates
-        votes[candidates.get(candidate)] = 1
-        c = 0
-        while c < numcandidates:
-            if not voter.vote(votes[c], c):
-                print 'Forcing system to restart your vote by invalidating your vote...'
-            for c2 in range(c+1, numcandidates):
-                voter.vote(1, c2)
-            c += 1
-    results= em.get_results()
-    print 'The following candidate(s) won with {} votes:'.format(results[2])
-    for c in results[1]:
-        print '\t{}:{}'.format(c, candidates[c])
+        votes[candidates.index(candidate)] = 1
+        for c in range(0, numcandidates):
+            voter.vote(votes[c], c)
+    results = em.get_results()
+    text = "Winners (votes=" + str(results[2]) + ")" + "\n "
+    text += "\n ".join([candidates[i] for i in results[1]])
+    alertGUI("Results", text)
 
 
-
-
-def main():
-    em = ElectionBoard(2)   #Number of voters to trigger completion
-    f = open("candidates.txt", "r")
-    candidates = [c.strip() for c in f if c.strip() != ""]
-    f.close()
+def main(candidates, num_voters):
+    em = ElectionBoard(num_voters)   #Number of voters will trigger completion
     numcandidates = len(candidates)
     clist = ['\t{}:{}'.format(c, candidates[c]) for c in range(numcandidates)]
     bb = BulletinBoard(15, numcandidates)
@@ -540,5 +535,16 @@ def main():
         print '\t{}:{}'.format(c, candidates[c])
 
 if __name__ == '__main__':
-	#main()
-    mainGUI()
+    USAGE = "Usage: python election.py candidates_file num_voters"
+    if len(sys.argv) == 3:
+        candidate_file = open(sys.argv[1], "r")
+        candidates = [c.strip() for c in candidate_file if c.strip() != ""]
+        candidate_file.close()
+        num_voters = int(sys.argv[2])
+
+        mainGUI(candidates, num_voters)
+        #main(candidates, num_voters)
+    else:
+        print USAGE
+        exit()
+
