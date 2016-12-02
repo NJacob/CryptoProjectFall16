@@ -205,36 +205,35 @@ class BulletinBoard():
                 self.votes[votername][candidate] = ciphertext
                 self.voterdata[votername][3] -= 1
                 if self.voterdata[votername][3] <= 0:
-                    self.numvotes = self.numvotes -1
+                    if 1!=self.check_if_voted(votername):
+                        self.votes.pop(votername, None)
+                        self.voterdata.pop(votername, None)
+                        print 'Your vote is invalid- it does not sum to 1, and has now been thrown out'
+                        return False
+                    else:
+                        self.numvotes = self.numvotes -1
                 return True
         print 'Your vote is invalid- Either you are unregistered, your vote does not have a valid signature, or you did not prove ZKP'
         print self.voterdata[votername]
         return False
 
     def check_if_voted(self, votername):
-        return votername in self.votes and self.voterdata[votername][3] <= 0
+        if votername in self.votes:
+            return self.countingauthority.check_results(self.votes[votername])
+        return 0
 
-    def get_votes(self, validate=False):#validation of votes (checking if exactly 1 vote per voter was 1) only possible when election is over
-        #Get the table of votes
+    def get_votes(self):
+        #Get the table of valid votes
         ret = []
-        validate = validate and self.numvotes <= 0
+        validvotes = [0,1]
         for v in self.votes:
-            if not validate:
+            if self.check_if_voted(v) in validvotes:
                 ret.append(self.votes[v])
-            elif self.check_if_voted(v):
-                if 1!=self.countingauthority.check_results(self.votes[v]):
-                    self.votes.pop(votername, None)
-                    self.voterdata.pop(votername, None)
-                    self.numvotes = self.numvotes + 1
-                    print 'The vote from {} is invalid- it does not sum to 1, and has now been thrown out'.format(v)
-                    return []
-                else:
-                    ret.append(self.votes[v])
         return ret
 
     def get_results(self):
         if self.numvotes <= 0:
-            return self.countingauthority.send_results(self.get_votes(validate=True), self.numcandidates)
+            return self.countingauthority.send_results(self.get_votes(), self.numcandidates)
         else:
             print 'Not all votes are in yet. Getting results now is not allowed.'
             return []
@@ -356,13 +355,11 @@ class ElectionBoard():
 
     #function for election board to decrypt the message.
     def decrypt(self, message):
-        if self.check_finished():
-            n = self.n
-            n2 = n**2
-            c = pow(message,self.lam,n2)
-            lc = (c-1)//n
-            return (lc*self.u)%n
-        return 0
+        n = self.n
+        n2 = n**2
+        c = pow(message,self.lam,n2)
+        lc = (c-1)//n
+        return (lc*self.u)%n
 
     #function which will go through all the tallies and call the decrypt message on each one.
     def decrypt_results(self, tallies):
@@ -380,7 +377,7 @@ class ElectionBoard():
 
     #function that will check to see if a voter has already voted in the election.
     def check_if_voted(self, voter):
-        return self.bulletinboard.check_if_voted(voter.get_name())
+        return 1==self.bulletinboard.check_if_voted(voter.get_name())
 
     #obtain the winner(s) of the election.
     def get_results(self):

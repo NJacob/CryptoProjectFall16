@@ -19,4 +19,5 @@ After starting the program, simply provide a unique name for each of the numvote
 Assumptions:
 Every voter that registers will eventually send a valid vote.
 Voters not using the GUI (which should only be possible if the entire election is being run on another client) will pay attention to the error messages if their vote fails and respond accordingly to complete their vote.
+No one will explicitly call electionboard.decrypt() or directly access member variables for any instances, as there is no real way to prevent this with the required design and since in this case the attackers (Red team) have the source code and will also be the ones running the program.
 
