@@ -266,11 +266,11 @@ class ElectionBoard():
     def __init__(self, nv=5):#generate keys for PPKE and blindsign
         #generate primes p,q, such that p>q
         #  and (p-1)*(q-1) is coprime with p*q
-        p = gmpy2.next_prime(1000)
-        for _ in range(0, random.randint(0,15)):
+        p = gmpy2.next_prime(100000000)
+        for _ in range(0, random.randint(0,300000)):
             p = gmpy2.next_prime(p)
         q = p
-        for _ in range(0, random.randint(1,16)):
+        for _ in range(0, random.randint(1,100000)):
             p = gmpy2.next_prime(p)
 
         n = p*q
