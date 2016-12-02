@@ -214,12 +214,14 @@ class BulletinBoard():
     def check_if_voted(self, votername):
         return votername in self.votes and self.voterdata[votername][3] <= 0
 
-    def get_votes(self):
-        #Get the table of valid votes
+    def get_votes(self, validate=False):#validation of votes (checking if exactly 1 vote per voter was 1) only possible when election is over
+        #Get the table of votes
         ret = []
-        validvotes = [0,1]
+        validate = validate and self.numvotes <= 0
         for v in self.votes:
-            if self.check_if_voted(v) in validvotes:
+            if not validate:
+                ret.append(self.votes[v])
+            elif self.check_if_voted(v):
                 if 1!=self.countingauthority.check_results(self.votes[v]):
                     self.votes.pop(votername, None)
                     self.voterdata.pop(votername, None)
@@ -232,7 +234,7 @@ class BulletinBoard():
 
     def get_results(self):
         if self.numvotes <= 0:
-            return self.countingauthority.send_results(self.get_votes(), self.numcandidates)
+            return self.countingauthority.send_results(self.get_votes(validate=True), self.numcandidates)
         else:
             print 'Not all votes are in yet. Getting results now is not allowed.'
             return []
