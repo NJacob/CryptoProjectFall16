@@ -35,7 +35,7 @@ def modinv(a, b):
     return ret
 
 
-class Voter():#always register name with board before creating a new Voter
+class Voter():#always register voter with board before creating a new Voter
     #Encrypt a 0 or 1 vote for any candidate w/ Paillier PKC
 
     name = None
@@ -82,7 +82,7 @@ class Voter():#always register name with board before creating a new Voter
                 u = (pow(g,r,n2)*pow(s,n,n2))%n2
             e = bb.generate_challenge(self, u)
             if e is False:
-                print 'No challenge issued for ZKP from the bulletin board, vote dismissed'
+                print 'No challenge issued for ZKP from the bulletin board, vote dismissed'#should never happen
                 return False
             v = r-e*m
             w = 0
@@ -96,7 +96,7 @@ class Voter():#always register name with board before creating a new Voter
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
 class CountingAuthority():
-    #Add up all the votes that were cast (because Paillier is homomorphic)
+    #Multiply all the votes that were cast (because Paillier is homomorphic)
     #Send the encrypted sum to the election board to decrypt
     electionboard = None
 
@@ -223,6 +223,7 @@ class BulletinBoard():
         return 0
 
     def get_votes(self):
+        #Get the table of valid votes
         ret = []
         validvotes = [0,1]
         for v in self.votes:
@@ -241,20 +242,20 @@ class ElectionBoard():
     #Allow voters to encrypt their vote w/ the public key
     #Decrypt final counts at the end
 
-    voters = []     #keep track of who has voted
+    voters = []     #keep track of who has registered
     numvoters = 5   #wait for everyone to vote before finishing
 
     #public key:
     n = None    #product of p and q
-    g = None    #generator (?)  random integer?
+    g = None    #generator 
 
     #initial constants
     p = None
     q = None
 
     #private key:
-    lam = None  # phi(p,q) = (p-1)*(q-1)
-    u = None    # 1 / L( g^{lcm} mod {n^2} ), where L(x) = (x-1) / n    ?
+    lam = None  # phi(p,q) = lcm((p-1),(q-1))
+    u = None    # 1 / L( g^{lam} mod {n^2} )modn, where L(x) = (x-1) / n    
 
     #values for blind sign
     be = None #blindsignkeydata
@@ -265,11 +266,11 @@ class ElectionBoard():
     def __init__(self, nv=5):#generate keys for PPKE and blindsign
         #generate primes p,q, such that p>q
         #  and (p-1)*(q-1) is coprime with p*q
-        p = gmpy2.next_prime(500)
-        for _ in range(0, random.randint(0,8)):
+        p = gmpy2.next_prime(1000)
+        for _ in range(0, random.randint(0,15)):
             p = gmpy2.next_prime(p)
         q = p
-        for _ in range(0, random.randint(1,9)):
+        for _ in range(0, random.randint(1,16)):
             p = gmpy2.next_prime(p)
 
         n = p*q
@@ -378,7 +379,7 @@ class ElectionBoard():
                 indices = [r]
             elif nv == maxvotes:
                 indices.append(r)
-        return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
+        return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), number of votes winner(s) got]
 
 def initializeGUI(candidates):
     candidate = ""
