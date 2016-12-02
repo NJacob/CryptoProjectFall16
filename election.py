@@ -205,22 +205,14 @@ class BulletinBoard():
                 self.votes[votername][candidate] = ciphertext
                 self.voterdata[votername][3] -= 1
                 if self.voterdata[votername][3] <= 0:
-                    if 1!=self.check_if_voted(votername):
-                        self.votes.pop(votername, None)
-                        self.voterdata.pop(votername, None)
-                        print 'Your vote is invalid- it does not sum to 1, and has now been thrown out'
-                        return False
-                    else:
-                        self.numvotes = self.numvotes -1
+                    self.numvotes = self.numvotes -1
                 return True
         print 'Your vote is invalid- Either you are unregistered, your vote does not have a valid signature, or you did not prove ZKP'
         print self.voterdata[votername]
         return False
 
     def check_if_voted(self, votername):
-        if votername in self.votes:
-            return self.countingauthority.check_results(self.votes[votername])
-        return 0
+        return votername in self.votes and self.voterdata[votername][3] <= 0
 
     def get_votes(self):
         #Get the table of valid votes
@@ -228,7 +220,14 @@ class BulletinBoard():
         validvotes = [0,1]
         for v in self.votes:
             if self.check_if_voted(v) in validvotes:
-                ret.append(self.votes[v])
+                if 1!=self.countingauthority.check_results(self.votes[v]):
+                    self.votes.pop(votername, None)
+                    self.voterdata.pop(votername, None)
+                    self.numvotes = self.numvotes + 1
+                    print 'The vote from {} is invalid- it does not sum to 1, and has now been thrown out'.format(v)
+                    return []
+                else:
+                    ret.append(self.votes[v])
         return ret
 
     def get_results(self):
@@ -355,11 +354,13 @@ class ElectionBoard():
 
     #function for election board to decrypt the message.
     def decrypt(self, message):
-        n = self.n
-        n2 = n**2
-        c = pow(message,self.lam,n2)
-        lc = (c-1)//n
-        return (lc*self.u)%n
+        if self.check_finished():
+            n = self.n
+            n2 = n**2
+            c = pow(message,self.lam,n2)
+            lc = (c-1)//n
+            return (lc*self.u)%n
+        return 0
 
     #function which will go through all the tallies and call the decrypt message on each one.
     def decrypt_results(self, tallies):
@@ -377,7 +378,7 @@ class ElectionBoard():
 
     #function that will check to see if a voter has already voted in the election.
     def check_if_voted(self, voter):
-        return 1==self.bulletinboard.check_if_voted(voter.get_name())
+        return self.bulletinboard.check_if_voted(voter.get_name())
 
     #obtain the winner(s) of the election.
     def get_results(self):
