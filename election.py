@@ -35,7 +35,7 @@ def modinv(a, b):
     return ret
 
 
-class Voter():#always register name with board before creating a new Voter
+class Voter():#always register voter with board before creating a new Voter
     #Encrypt a 0 or 1 vote for any candidate w/ Paillier PKC
 
     name = None
@@ -82,7 +82,7 @@ class Voter():#always register name with board before creating a new Voter
                 u = (pow(g,r,n2)*pow(s,n,n2))%n2
             e = bb.generate_challenge(self, u)
             if e is False:
-                print 'No challenge issued for ZKP from the bulletin board, vote dismissed'
+                print 'No challenge issued for ZKP from the bulletin board, vote dismissed'#should never happen
                 return False
             v = r-e*m
             w = 0
@@ -96,7 +96,7 @@ class Voter():#always register name with board before creating a new Voter
         return bb.receive_encrypted_message(self, ciphertext, signedciphertext, candidate)
 
 class CountingAuthority():
-    #Add up all the votes that were cast (because Paillier is homomorphic)
+    #Multiply all the votes that were cast (because Paillier is homomorphic)
     #Send the encrypted sum to the election board to decrypt
     electionboard = None
 
@@ -223,6 +223,7 @@ class BulletinBoard():
         return 0
 
     def get_votes(self):
+        #Get the table of valid votes
         ret = []
         validvotes = [0,1]
         for v in self.votes:
@@ -241,20 +242,20 @@ class ElectionBoard():
     #Allow voters to encrypt their vote w/ the public key
     #Decrypt final counts at the end
 
-    voters = []     #keep track of who has voted
+    voters = []     #keep track of who has registered
     numvoters = 5   #wait for everyone to vote before finishing
 
     #public key:
     n = None    #product of p and q
-    g = None    #generator (?)  random integer?
+    g = None    #generator
 
     #initial constants
     p = None
     q = None
 
     #private key:
-    lam = None  # phi(p,q) = (p-1)*(q-1)
-    u = None    # 1 / L( g^{lcm} mod {n^2} ), where L(x) = (x-1) / n    ?
+    lam = None  # phi(p,q) = lcm((p-1),(q-1))
+    u = None    # 1 / L( g^{lam} mod {n^2} )modn, where L(x) = (x-1) / n
 
     #values for blind sign
     be = None #blindsignkeydata
@@ -265,11 +266,11 @@ class ElectionBoard():
     def __init__(self, nv=5):#generate keys for PPKE and blindsign
         #generate primes p,q, such that p>q
         #  and (p-1)*(q-1) is coprime with p*q
-        p = gmpy2.next_prime(500)
-        for _ in range(0, random.randint(0,8)):
+        p = gmpy2.next_prime(100000000)
+        for _ in range(0, random.randint(0,300000)):
             p = gmpy2.next_prime(p)
         q = p
-        for _ in range(0, random.randint(1,9)):
+        for _ in range(0, random.randint(1,100000)):
             p = gmpy2.next_prime(p)
 
         n = p*q
@@ -309,30 +310,36 @@ class ElectionBoard():
         self.bd=bd
         self.numvoters=nv
 
+    #function to set the bulletin board for the election board.
     def set_bulletin_board(self, bb):
         self.bulletinboard = bb
-
+    #function to retrieve the bulletin board of the election board.
     def get_bulletin_board(self):
         return self.bulletinboard
-
+    #function to obtain a list of all the voter objects
     def get_voters(self):
         return self.voters
 
+    #function which will return the names of all the voters in a list.
     def get_voternames(self):
         return [v.get_name() for v in self.voters]
 
+    #function which will register a voter to the election board.
     def register_voter(self, v):
         if v not in self.voters and v.get_name() not in [voter.get_name() for voter in self.voters]:
             self.voters.append(v)
             return True
         return False
 
+    #function that will check to see if a voter has registered
     def check_registered(self, v):
         return v in self.voters
 
+    #function that will retrieve the public key of the election board.
     def get_public_key(self):
         return (self.n, self.g)
 
+    #function to perform a blind signature on the encrypted message.
     def blind_sign(self, message, voter):
         if voter not in self.voters:
             return False
@@ -340,11 +347,13 @@ class ElectionBoard():
         e = self.be
         return pow(message,e,n)
 
+    #function to have election board unsign the message.
     def unsign(self, message):
         n = self.n
         d = self.bd
         return pow(message,d,n)
 
+    #function for election board to decrypt the message.
     def decrypt(self, message):
         n = self.n
         n2 = n**2
@@ -352,21 +361,25 @@ class ElectionBoard():
         lc = (c-1)//n
         return (lc*self.u)%n
 
+    #function which will go through all the tallies and call the decrypt message on each one.
     def decrypt_results(self, tallies):
         ret = []
         for t in tallies:
             ret.append(self.decrypt(t))
         return ret
 
+    #function that will check to see if the number of voters specified in input have all voted.
     def check_finished(self):
         bb = self.bulletinboard
         if bb is not None:
             return 0==bb.numvotes
         return False
 
+    #function that will check to see if a voter has already voted in the election.
     def check_if_voted(self, voter):
         return 1==self.bulletinboard.check_if_voted(voter.get_name())
 
+    #obtain the winner(s) of the election.
     def get_results(self):
         res = self.bulletinboard.get_results()
         maxvotes = 0
@@ -378,9 +391,10 @@ class ElectionBoard():
                 indices = [r]
             elif nv == maxvotes:
                 indices.append(r)
-        return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), votes winner(s) got]
+        return [res, indices, maxvotes]#[list of tallies, list of indices of winner(s), number of votes winner(s) got]
 
 def initializeGUI(candidates):
+    #Will create the GUI popup which allows the voter to enter its name and also select the candidate of choice from a scroll down option.
     candidate = ""
     voter = ""
     root = Tk()
@@ -398,22 +412,27 @@ def initializeGUI(candidates):
         var.set(candidates[0])
     else:
         var.set(candidates[0])
+    #display the candidates on the GUI
     option = OptionMenu(mainframe, var, *candidates)
     option.pack()
     option.grid(row = 1, column =1)
     Label(mainframe, text="Name").grid(row = 2, column = 1)
     name = StringVar(root)
     name_ent = Entry(mainframe, text=name, width = 15).grid(column = 2, row = 2)
+    #When vote button is pressed, exit out of the GUI for that voter.
     def enter():
         root.destroy()
 
     button = Button(root, text="Vote", command=enter)
     button.pack()
     root.mainloop()
+    #obtain the candidate chosen and the voter name and return it as a tuple.
     candidate = var.get()
     voter = name.get()
     return(candidate, voter)
 
+#this function will act to serve an alert message. it is used to display a GUI if a voter has voted more than once,
+#to display the end results of the election, or if a string with just blank spaces or tab or new lines is entered for the name of voter.
 def alertGUI(title, msg):
     app = Tk()
     app.title(title)
@@ -430,6 +449,7 @@ def alertGUI(title, msg):
     B.pack()
     app.mainloop()
 
+#a method which is called if GUI is used by the voter instead of entering through the command terminal.
 def mainGUI(candidates, num_voters):
     em = ElectionBoard(num_voters)   #Number of voters will trigger completion
     numcandidates = len(candidates)
@@ -437,9 +457,10 @@ def mainGUI(candidates, num_voters):
     bb = BulletinBoard(15, numcandidates)
     linkboards(em, bb)
     voters = {}
-
+    #while not all voters have voted, continue to display a GUI
     while not em.check_finished():
         (candidate, vname) = initializeGUI(candidates)
+        #check to make sure that an empty string was not passed.
         if len(vname.strip()) == 0:
             alertGUI("Error: Invalid Name", "Try a different name")
             continue
@@ -448,7 +469,9 @@ def mainGUI(candidates, num_voters):
             voter = voters[vname]
         else:
             voters[vname] = voter
+        #register the voter with the election board.
         em.register_voter(voter)
+        #if voter has already voted before, then display alert GUI
         if em.check_if_voted(voter):
             alertGUI("Error: Duplicate Name", "Try a different name")
             continue
@@ -473,8 +496,10 @@ def main(candidates, num_voters):
     print 'Candidates and their numbers:'
     for cn in clist:
         print cn
-    while not em.check_finished():#v < 2:
+    #continue to prompt voters to vote while the process is still going on.
+    while not em.check_finished():
         vname =  raw_input('What is your name?\n')
+        #check to see if voter name upon being stripped is an empty string.
         if len(vname.strip()) == 0:
             print 'Not a valid name'
             continue
@@ -483,13 +508,17 @@ def main(candidates, num_voters):
             voter = voters[vname]
         else:
             voters[vname] = voter
+        #register the voter.
         em.register_voter(voter)
+        #ensure that the voter has not already voted in election.
         if em.check_if_voted(voter):
             print 'A voter with this name has already voted'
             continue
         vote = -2
+        #while loop that will keep running until a valid candidate is chosen by the voter.
         while not -1 <= vote < numcandidates:
             str_vote = raw_input('Which candidate are you voting for(type -1 to see a list of candidates)?\n')
+            #make sure that candidate number entered is in fact a number
             if str_vote.isdigit():
                 vote = int(str_vote)
             else:
@@ -504,6 +533,7 @@ def main(candidates, num_voters):
         votes = [0]*numcandidates
         votes[vote] = 1
         c = 0
+        #go through checking for invalid votes and then giving user the option to restart the vote.
         while c < numcandidates:
             if not voter.vote(votes[c], c):
                 print 'Forcing system to restart your vote by invalidating your vote...'
@@ -530,6 +560,7 @@ def main(candidates, num_voters):
             c += 1
         v += 1
     results= em.get_results()
+    #display the end results of the election regarding the winner(s)
     print 'The following candidate(s) won with {} votes:'.format(results[2])
     for c in results[1]:
         print '\t{}:{}'.format(c, candidates[c])
@@ -547,4 +578,3 @@ if __name__ == '__main__':
     else:
         print USAGE
         exit()
-
