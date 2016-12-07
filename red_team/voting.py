@@ -1,5 +1,6 @@
 import fractions#added
 import random#added
+import gmpy2#added
 
 #Read the information about the registered voters(Only requires name at this point)
 f = open('voters.txt','r')
@@ -266,8 +267,26 @@ def modinv2(a, b):#added
     return ret
     
 def bruteforce(table):#added
-    m = 0
     n2 = n**2
+    print 'Real secret key: (lambda, u)=({},{})'.format(l, u)
+    pb = 2
+    while n%pb != 0:
+        pb = gmpy2.next_prime(pb)
+    qb = n/pb
+    lamfac = ((pb-1)*(qb-1))/fractions.gcd(pb-1, qb-1)
+    ubfac = (pow(g,lamfac,n2)-1)//n
+    ubfac = modinv2(ubfac, n)
+    print '\nSecret key found (by factoring): (lambda, u)=({},{})'.format(lamfac, ubfac)
+    table_dec = []
+    for row in table:
+        row_dec = []
+        for m in row:
+            c = pow(m,lamfac,n2)
+            lc = (c-1)//n
+            row_dec.append((lc*ubfac)%n)
+        table_dec.append(row_dec)
+    print 'Table of decrypted votes (brute forced, factoring method):', table_dec
+    m = 0
     lam = 1
     ub = None
     while ub is None:
@@ -300,17 +319,17 @@ def bruteforce(table):#added
                     ub = None
                 else:
                     ub = modinv2(ub, n)
-    print 'Secret key found: (lambda, u)=({},{})'.format(lam, ub)
-    print 'Real secret key: (lambda, u)=({},{})'.format(l, u)
+    print '\nSecret key found (hard method): (lambda, u)=({},{})'.format(lam, ub)
     table_dec = []
     for row in table:
         row_dec = []
         for m in row:
             c = pow(m,lam,n2)
             lc = (c-1)//n
-            row_dec.append((lc*u)%n)
+            row_dec.append((lc*ub)%n)
         table_dec.append(row_dec)
-    print 'Table of decrypted votes (brute forced):', table_dec
+    print 'Table of decrypted votes (brute forced, hard method):', table_dec
+    print ''
     
 def testZKP(bb):#added
     cannotfail = True
@@ -322,9 +341,9 @@ def testZKP(bb):#added
             print m
         m = m+1
     if cannotfail:
-        print 'ZKP can never fail'
+        print '\nZKP can never fail'
     elif not cannotfail:
-        print 'ZKP can fail and might be working'   
+        print '\nZKP can fail and might be working'   
     
 if __name__ == "__main__":
     EMC2 = EM(dk,n)
@@ -334,7 +353,7 @@ if __name__ == "__main__":
     table = BB8.voting()
     tableD = CIA.countVotes(table)
     testZKP(BB8)#added
-    print 'Table of encrypted votes: ', table#added
+    print '\nTable of encrypted votes: ', table#added
     bruteforce(table)#added
     EMC2.decryptVotes(tableD)
    
