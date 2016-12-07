@@ -1,3 +1,6 @@
+import fractions#added
+import random#added
+
 #Read the information about the registered voters(Only requires name at this point)
 f = open('voters.txt','r')
 line = f.readline()
@@ -56,6 +59,76 @@ u = L((g**l)%(n**2))
 u = modinv(u,n)
 ek = (n,g)
 dk = (l,u)
+
+def modinv2(a, b):#added
+    #Modular multiplicative inverse
+    #Find some `ret` such that `a`*`ret` = 1 mod `b`
+    ret = None
+    if a==1:
+        ret = 1
+    a = a%b
+    v = [[1,0],[0,1]]
+    A=b
+    B=a
+    y = A//B
+    C = (A%B)
+    while C > 1:
+        vtmp = [(v[0][0]-y*v[1][0]), (v[0][1]-y*v[1][1])]
+        v = [v[1], vtmp]
+        A = B
+        B = C
+        y = A//B
+        C = (A%B)
+    if C == 1:
+        ret = (v[0][1]-y*v[1][1])%b
+    return ret
+    
+def bruteforce(table):#added
+    m = 0
+    n2 = n**2
+    lam = 1
+    ub = None
+    while ub is None:
+        ub = (pow(g,lam,n2)-1)//n
+        if (fractions.gcd(ub, n)) != 1:
+            lam = lam+1
+            ub = None
+        else:
+            ub = modinv2(ub, n)
+    while m < n:
+        r = random.randint(1, n)
+        x = random.randint(1, n)
+        while 1!=fractions.gcd(x, n):
+            x = random.randint(1, n)
+        while 1!=fractions.gcd(r, n):
+            r = random.randint(1, n)
+        ciphertext = (pow(g,m,n2)*pow(x,n,n2))%n2
+        c = pow(ciphertext,lam,n2)
+        lc = (c-1)//n
+        if m == (lc*ub)%n:
+            m = m+1
+        else:
+            m = 1
+            lam = lam+1
+            ub = None
+            while ub is None:
+                ub = (pow(g,lam,n2)-1)//n
+                if (fractions.gcd(ub, n)) != 1:
+                    lam = lam+1
+                    ub = None
+                else:
+                    ub = modinv2(ub, n)
+    print 'Secret key found: (lambda, u)=({},{})'.format(lam, ub)
+    print 'Real secret key: (lambda, u)=({},{})'.format(l, u)
+    table_dec = []
+    for row in table:
+        row_dec = []
+        for m in row:
+            c = pow(m,lam,n2)
+            lc = (c-1)//n
+            row_dec.append((lc*u)%n)
+        table_dec.append(row_dec)
+    print 'Table of decrypted votes (brute forced):', table_dec
 
 #Election Board Class
 class EM:
@@ -246,5 +319,7 @@ if __name__ == "__main__":
     
     table = BB8.voting()
     tableD = CIA.countVotes(table)
+    print 'Table of encrypted votes: ', table#added
+    bruteforce(table)#added
     EMC2.decryptVotes(tableD)
    
